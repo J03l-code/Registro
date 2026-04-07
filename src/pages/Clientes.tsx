@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Search, Plus, X, MessageCircle, Filter, Eye, DollarSign, AtSign, ArrowRight, BellRing, CalendarClock, Download, UploadCloud, FileText, LayoutList, KanbanSquare } from "lucide-react"
+import { Search, Plus, X, MessageCircle, Filter, Eye, DollarSign, AtSign, ArrowRight, BellRing, CalendarClock, Download, UploadCloud, FileText, LayoutList, KanbanSquare, Trash2, Globe, Share2, Mail } from "lucide-react"
 import { QuoteGenerator } from "../components/QuoteGenerator"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
@@ -106,6 +106,18 @@ export function Clientes() {
     const handleWhatsApp = (name: string, phone: string) => {
         const text = encodeURIComponent(`Hola ${name}, te contacto de [MiEmprendimiento], ¿cómo podemos ayudarte hoy?`);
         window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${text}`, '_blank');
+    };
+
+    // FUNCIÓN ELIMINAR CLIENTE CON DOBLE CONFIRMACIÓN
+    const handleDeleteClient = (id: number, name: string) => {
+        if (!confirm(`¿Estás seguro de eliminar a "${name}"?\n\nEsta acción eliminará TODOS sus datos: historial, archivos y tareas.`)) return;
+        setClients(prev => prev.filter(c => c.id !== id));
+        if (currentLead && currentLead.id === id) { setPanelOpen(false); setCurrentLead(null); }
+        fetch('/api/clientes.php', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id })
+        }).catch(err => console.error("Error eliminando:", err));
     };
 
     const openHistoryPanel = (lead: any) => {
@@ -337,6 +349,9 @@ export function Clientes() {
                                                     </span>
                                                 </span>
                                             )}
+                                            <button onClick={() => handleDeleteClient(client.id, client.name)} className="text-gray-300 hover:text-red-500 p-1 rounded transition-all opacity-0 group-hover:opacity-100" title="Eliminar Lead">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
                                         </td>
                                         <td className="px-4 py-2 border-r border-gray-200 font-bold text-gray-900 border-l-[3px] border-l-transparent hover:border-l-brand-600 focus-within:border-l-brand-600">
                                             <input className="w-full bg-transparent border-0 focus:ring-0 p-0 font-bold hover:bg-gray-100 focus:bg-white focus:outline-none" value={client.name} onChange={(e) => setClients(prev => prev.map(c => c.id === client.id ? { ...c, name: e.target.value } : c))} onBlur={(e) => handleUpdateField(client.id, 'name', e.target.value)} />
@@ -428,6 +443,9 @@ export function Clientes() {
                                             <button onClick={() => handleWhatsApp(client.name, client.phone)} className="flex items-center text-xs text-green-600 font-semibold hover:bg-green-50 p-1.5 rounded transition-colors">
                                                 <MessageCircle className="w-3.5 h-3.5 mr-1" /> WhatsApp
                                             </button>
+                                            <button onClick={() => handleDeleteClient(client.id, client.name)} className="flex items-center text-xs text-gray-400 hover:text-red-500 font-semibold p-1.5 rounded transition-colors opacity-0 group-hover:opacity-100" title="Eliminar">
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
                                             <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                                                 {client.rubro || 'Sin Rubro'}
                                             </span>
@@ -472,8 +490,28 @@ export function Clientes() {
                                         <input type="number" placeholder="Valor de Cotización ($)" className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full" value={currentLead.estimated_value || ''} onChange={(e) => setCurrentLead({ ...currentLead, estimated_value: e.target.value })} onBlur={(e) => handleUpdateField(currentLead.id, 'estimated_value', parseFloat(e.target.value) || 0)} />
                                     </div>
                                     <div className="flex items-center">
+                                        <Mail className="w-4 h-4 text-gray-400 mr-2" />
+                                        <input type="email" placeholder="correo@ejemplo.com" className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full" value={currentLead.email || ''} onChange={(e) => setCurrentLead({ ...currentLead, email: e.target.value })} onBlur={(e) => handleUpdateField(currentLead.id, 'email', e.target.value)} />
+                                    </div>
+                                    <div className="flex items-center">
                                         <AtSign className="w-4 h-4 text-pink-500 mr-2" />
                                         <input placeholder="@usuario_instagram" className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full" value={currentLead.social_instagram || ''} onChange={(e) => setCurrentLead({ ...currentLead, social_instagram: e.target.value })} onBlur={(e) => handleUpdateField(currentLead.id, 'social_instagram', e.target.value)} />
+                                    </div>
+                                    <div className="flex items-center">
+                                        <Share2 className="w-4 h-4 text-blue-600 mr-2" />
+                                        <input placeholder="Facebook URL o nombre" className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full" value={currentLead.social_facebook || ''} onChange={(e) => setCurrentLead({ ...currentLead, social_facebook: e.target.value })} onBlur={(e) => handleUpdateField(currentLead.id, 'social_facebook', e.target.value)} />
+                                    </div>
+                                    <div className="flex items-center">
+                                        <Globe className="w-4 h-4 text-teal-500 mr-2" />
+                                        <input placeholder="www.sitio-web.com" className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full" value={currentLead.social_website || ''} onChange={(e) => setCurrentLead({ ...currentLead, social_website: e.target.value })} onBlur={(e) => handleUpdateField(currentLead.id, 'social_website', e.target.value)} />
+                                    </div>
+                                    <div className="flex items-center">
+                                        <span className="text-xs font-semibold text-gray-500 mr-2 w-14">Pipeline</span>
+                                        <select className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full font-semibold" value={currentLead.status || 'FRÍO'} onChange={(e) => { handleUpdateField(currentLead.id, 'status', e.target.value); setCurrentLead({ ...currentLead, status: e.target.value }); }}>
+                                            <option value="FRÍO">❄️ Frío</option>
+                                            <option value="TIBIO">🔥 Tibio</option>
+                                            <option value="CALIENTE">💰 Caliente / Pagado</option>
+                                        </select>
                                     </div>
                                 </div>
 
@@ -496,6 +534,10 @@ export function Clientes() {
                                 <Button onClick={() => setIsQuoteOpen(true)} className="w-full mt-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 shadow-none border border-indigo-200 font-bold">
                                     <FileText className="w-4 h-4 mr-2" /> Generar Cotización PDF Formal
                                 </Button>
+
+                                <button onClick={() => handleDeleteClient(currentLead.id, currentLead.name)} className="w-full mt-3 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors font-semibold flex items-center justify-center">
+                                    <Trash2 className="w-3.5 h-3.5 mr-2" /> Eliminar este cliente permanentemente
+                                </button>
                             </div>
 
                             <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">

@@ -71,7 +71,7 @@ switch ($method) {
 
         if (isset($data['id'])) {
             // Incorporamos el financial 'estimated_value' e instagram para update asícrono
-            $allowedFields = ['is_contacted', 'did_answer', 'wp_sent', 'call_date', 'interest_level', 'notes', 'rubro', 'estimated_value', 'social_instagram', 'name', 'phone'];
+            $allowedFields = ['is_contacted', 'did_answer', 'wp_sent', 'call_date', 'interest_level', 'notes', 'rubro', 'estimated_value', 'social_instagram', 'social_facebook', 'social_website', 'name', 'phone', 'email', 'status'];
             $updates = [];
             $params = [':id' => $data['id']];
             $friendly_changes = ""; // Acumulador de Tracking
@@ -90,6 +90,10 @@ switch ($method) {
                             $friendly_changes = "Comentó Interés: " . $data[$field];
                         if ($field === 'notes')
                             $friendly_changes = "Actualizó Expediente: " . substr($data[$field], 0, 50) . "...";
+                        if ($field === 'status')
+                            $friendly_changes = "Movió Pipeline a: " . $data[$field];
+                        if ($field === 'estimated_value')
+                            $friendly_changes = "Ajustó cotización a: $" . $data[$field];
                     }
                 }
             }
@@ -114,6 +118,24 @@ switch ($method) {
             } else {
                 echo json_encode(["success" => true]);
             }
+        }
+        break;
+
+    case 'DELETE':
+        $data = json_decode(file_get_contents("php://input"), true);
+        if (isset($data['id'])) {
+            try {
+                // Las FK con ON DELETE CASCADE borrarán history, documents y activities automáticamente
+                $stmt = $pdo->prepare("DELETE FROM leads WHERE id = :id");
+                $stmt->execute([':id' => $data['id']]);
+                echo json_encode(["success" => true]);
+            } catch (PDOException $e) {
+                http_response_code(500);
+                echo json_encode(["error" => "Error eliminando: " . $e->getMessage()]);
+            }
+        } else {
+            http_response_code(400);
+            echo json_encode(["error" => "Se requiere id para eliminar."]);
         }
         break;
 
