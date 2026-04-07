@@ -1,31 +1,34 @@
 import { useState, useEffect } from "react"
-import { Search, Plus, X, Phone, MessageCircle } from "lucide-react"
+import { Search, Plus, X, Phone, MessageCircle, Filter } from "lucide-react"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 import { Card, CardContent } from "../components/ui/Card"
 
-// Utilidad simple para extraer colores según el nivel de interés en el servicio
 const getInterestColor = (text: string) => {
     const t = (text || '').toLowerCase();
     if (t.includes('no desea') || t.includes('rechazó')) return 'bg-cyan-300 text-cyan-900 border-cyan-400';
-    if (t.includes('enviar') || t.includes('interesado') || t.includes('contactar')) return 'bg-green-400 text-green-900 border-green-500';
+    if (t.includes('enviar') || t.includes('interesado') || t.includes('contactar') || t.includes('cotizar')) return 'bg-green-400 text-green-900 border-green-500';
     if (t.includes('equivocado') || t.includes('no contest')) return 'bg-gray-200 text-gray-700 border-gray-300';
     return 'bg-white border-gray-300';
 };
 
 export function Clientes() {
     const [clients, setClients] = useState<any[]>([]);
-    const [searchTerm, setSearchTerm] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    // Nuevo cliente adaptado
+    // Estados para Filtros Inteligentes
+    const [searchTerm, setSearchTerm] = useState("");
+    const [filterContactado, setFilterContactado] = useState("TODOS");
+    const [filterAnswered, setFilterAnswered] = useState("TODOS");
+    const [filterWp, setFilterWp] = useState("TODOS");
+    const [showFilters, setShowFilters] = useState(false);
+
     const [newClient, setNewClient] = useState({
         name: '', rubro: '', phone: '', email: 'n/a@n/a.com', is_contacted: 'SÍ', did_answer: false, wp_sent: false, interest_level: '', notes: ''
     });
 
-    // 1. Cargar Base de datos
     useEffect(() => {
         fetch('/api/clientes.php')
             .then(r => r.json())
@@ -39,7 +42,6 @@ export function Clientes() {
             });
     }, []);
 
-    // 2. Guardar Permanentemente en BD Nuevo Lead
     const handleAddClient = (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
@@ -62,13 +64,8 @@ export function Clientes() {
             .finally(() => setSaving(false));
     };
 
-
-    // 3. ACTUALIZACIÓN AUTOMÁTICA EN LÍNEA (ESTILO EXCEL)
     const handleUpdateField = (id: number, field: string, value: any) => {
-        // Actualización optimista de interfaz
         setClients(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
-
-        // Viaje silencioso al servidor Backend para guardado imperceptible
         fetch('/api/clientes.php', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -81,10 +78,28 @@ export function Clientes() {
         window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${text}`, '_blank');
     };
 
-    const filteredClients = clients.filter(c =>
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.rubro && c.rubro.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    // Motor de Búsqueda y Filtrado Inteligente (Acumulativo)
+    const filteredClients = clients.filter(c => {
+        // 1. Coincidencia de Texto (Búsqueda global)
+        const matchText = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (c.rubro && c.rubro.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (c.phone && c.phone.includes(searchTerm));
+
+        // 2. Filtro Contactado
+        const matchContacted = filterContactado === "TODOS" || c.is_contacted === filterContactado;
+
+        // 3. Filtro de "Contestó a la llamada"
+        let matchAnswered = true;
+        if (filterAnswered === "SÍ") matchAnswered = (c.did_answer === 1 || c.did_answer === true);
+        if (filterAnswered === "NO") matchAnswered = (c.did_answer === 0 || c.did_answer === false);
+
+        // 4. Filtro WhatsApp
+        let matchWp = true;
+        if (filterWp === "SÍ") matchWp = (c.wp_sent === 1 || c.wp_sent === true);
+        if (filterWp === "NO") matchWp = (c.wp_sent === 0 || c.wp_sent === false);
+
+        return matchText && matchContacted && matchAnswered && matchWp;
+    });
 
     return (
         <div className="space-y-4 relative w-full h-full flex flex-col">
@@ -97,22 +112,63 @@ export function Clientes() {
                     <div className="relative w-full sm:w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <Input
-                            placeholder="Buscar (Nombre / Rubro)"
+                            placeholder="Buscar (Nombre, Rubro, Télefono)"
                             className="pl-9 h-10 w-full"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
+                    <Button
+                        variant="outline"
+                        className={`h-10 border-gray-300 ${showFilters ? 'bg-gray-100 text-gray-900' : 'text-gray-600'}`}
+                        onClick={() => setShowFilters(!showFilters)}
+                    >
+                        <Filter className="w-4 h-4 mr-2" />
+                        Filtros
+                    </Button>
                     <Button className="bg-brand-600 hover:bg-brand-700 h-10 flex-shrink-0" onClick={() => setIsModalOpen(true)}>
                         <Plus className="w-4 h-4 mr-2" />
-                        Nuevo Cliente
+                        Nuevo Lead
                     </Button>
                 </div>
             </div>
 
+            {/* PANEL DE FILTROS INTELIGENTES */}
+            {showFilters && (
+                <Card className="animate-in fade-in slide-in-from-top-2 border-gray-200">
+                    <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-6 bg-gray-50/50">
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Estado de Contacto</label>
+                            <div className="flex bg-white rounded-md border border-gray-200 p-1 w-full text-sm font-medium h-9">
+                                <button className={`flex-1 rounded ${filterContactado === 'TODOS' ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500'}`} onClick={() => setFilterContactado('TODOS')}>Todos</button>
+                                <button className={`flex-1 rounded ${filterContactado === 'SÍ' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-gray-500'}`} onClick={() => setFilterContactado('SÍ')}>Sí</button>
+                                <button className={`flex-1 rounded ${filterContactado === 'NO' ? 'bg-red-50 text-red-700 shadow-sm' : 'text-gray-500'}`} onClick={() => setFilterContactado('NO')}>No</button>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">¿Contestó a la Llamada?</label>
+                            <div className="flex bg-white rounded-md border border-gray-200 p-1 w-full text-sm font-medium h-9">
+                                <button className={`flex-1 rounded ${filterAnswered === 'TODOS' ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500'}`} onClick={() => setFilterAnswered('TODOS')}>Todos</button>
+                                <button className={`flex-1 rounded ${filterAnswered === 'SÍ' ? 'bg-green-100 text-green-700 shadow-sm' : 'text-gray-500'}`} onClick={() => setFilterAnswered('SÍ')}>Contestó</button>
+                                <button className={`flex-1 rounded ${filterAnswered === 'NO' ? 'bg-orange-50 text-orange-700 shadow-sm' : 'text-gray-500'}`} onClick={() => setFilterAnswered('NO')}>Ausente</button>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Mensaje WhatsApp</label>
+                            <div className="flex bg-white rounded-md border border-gray-200 p-1 w-full text-sm font-medium h-9">
+                                <button className={`flex-1 rounded ${filterWp === 'TODOS' ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500'}`} onClick={() => setFilterWp('TODOS')}>Todos</button>
+                                <button className={`flex-1 rounded ${filterWp === 'SÍ' ? 'bg-[#e7f9ee] text-[#1e8b46] shadow-sm' : 'text-gray-500'}`} onClick={() => setFilterWp('SÍ')}>Enviados</button>
+                                <button className={`flex-1 rounded ${filterWp === 'NO' ? 'bg-gray-100 text-gray-600 shadow-sm' : 'text-gray-500'}`} onClick={() => setFilterWp('NO')}>Faltantes</button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             <Card className="flex-1 border-gray-300 shadow-sm overflow-hidden">
-                <CardContent className="p-0 overflow-x-auto h-[70vh]">
-                    {/* TABLA TIPO EXCEL */}
+                <CardContent className="p-0 overflow-x-auto h-[65vh]">
                     <table className="w-full text-sm text-left border-collapse">
                         <thead className="bg-[#4a55c2] text-white font-medium sticky top-0 z-10 shadow-sm border-b border-[#3b43a1]">
                             <tr>
@@ -219,12 +275,12 @@ export function Clientes() {
                                         />
                                     </td>
 
-                                    {/* Interés en el servicio Coloreado */}
+                                    {/* Interés con Colores Dinámicos */}
                                     <td className="p-1 h-full">
                                         <textarea
                                             className={`w-full h-full min-h-[60px] text-xs font-semibold p-2 border-0 focus:ring-2 focus:ring-blue-500 resize-y leading-tight transition-colors rounded ${getInterestColor(client.interest_level)}`}
                                             value={client.interest_level || ''}
-                                            placeholder="Escribir nivel de interés..."
+                                            placeholder="Escribir (Azul='no desea', Verde='enviar info', Gris='equivocado')..."
                                             onChange={(e) => setClients(prev => prev.map(c => c.id === client.id ? { ...c, interest_level: e.target.value } : c))}
                                             onBlur={(e) => handleUpdateField(client.id, 'interest_level', e.target.value)}
                                         />
@@ -235,7 +291,7 @@ export function Clientes() {
                             {!loading && filteredClients.length === 0 && (
                                 <tr>
                                     <td colSpan={9} className="px-6 py-10 text-center text-gray-500">
-                                        No hay registros vacíos para llamar. Agrega uno nuevo arriba.
+                                        No hay registros que coincidan con la búsqueda.
                                     </td>
                                 </tr>
                             )}
@@ -244,7 +300,7 @@ export function Clientes() {
                 </CardContent>
             </Card>
 
-            {/* Modal Creador Normalizado */}
+            {/* Modal Creador */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <Card className="w-full max-w-lg shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
