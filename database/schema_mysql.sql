@@ -3,10 +3,17 @@
 CREATE TABLE IF NOT EXISTS leads (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    rubro VARCHAR(100) NULL,
     phone VARCHAR(50),
     email VARCHAR(255),
     status ENUM('FRÍO', 'TIBIO', 'CALIENTE') DEFAULT 'FRÍO',
     source VARCHAR(255),
+    -- Campos Tipo Hoja de Cálculo
+    is_contacted ENUM('SÍ', 'NO') DEFAULT 'NO',
+    did_answer BOOLEAN DEFAULT FALSE,
+    wp_sent BOOLEAN DEFAULT FALSE,
+    call_date DATE NULL,
+    interest_level VARCHAR(255) NULL,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
