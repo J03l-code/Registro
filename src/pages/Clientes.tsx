@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Search, Plus, X, MessageCircle, Filter, Eye, DollarSign, AtSign, ArrowRight, BellRing } from "lucide-react"
+import { Search, Plus, X, MessageCircle, Filter, Eye, DollarSign, AtSign, ArrowRight, BellRing, CalendarClock } from "lucide-react"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 import { Card, CardContent } from "../components/ui/Card"
@@ -29,6 +29,11 @@ export function Clientes() {
     const [currentLead, setCurrentLead] = useState<any>(null);
     const [selectedHistory, setSelectedHistory] = useState<any[]>([]);
 
+    // ESTADOS NUEVOS PARA CREACIÓN CRUZADA DE AGENDA (FASE 7)
+    const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+    const [taskSaving, setTaskSaving] = useState(false);
+    const [newTask, setNewTask] = useState({ type: 'LLAMADA', summary: '', scheduled_for: '' });
+
     const [newClient, setNewClient] = useState({
         name: '', rubro: '', phone: '', email: 'n/a@n/a.com', is_contacted: 'SÍ', did_answer: false, wp_sent: false, interest_level: '', notes: '', estimated_value: 0
     });
@@ -57,7 +62,7 @@ export function Clientes() {
             .then(r => r.json())
             .then(data => {
                 if (data.success && data.client) {
-                    data.client.pending_tasks = 0; // Al crearlo, trae 0 pendientes.
+                    data.client.pending_tasks = 0;
                     setClients([data.client, ...clients]);
                     setIsModalOpen(false);
                     setNewClient({ name: '', rubro: '', phone: '', email: '', is_contacted: 'NO', did_answer: false, wp_sent: false, interest_level: '', notes: '', estimated_value: 0 });
@@ -76,7 +81,6 @@ export function Clientes() {
             body: JSON.stringify({ id, [field]: value })
         }).catch(err => console.error("Error al guardado background:", err));
 
-        // Si actualizamos datos mientras vemos el expediente lateral, sincronizamos el panel visual también
         if (currentLead && currentLead.id === id) {
             setCurrentLead((prev: any) => ({ ...prev, [field]: value }));
         }
@@ -87,7 +91,6 @@ export function Clientes() {
         window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${text}`, '_blank');
     };
 
-    // Abre el slide-over panel de Expediente (Timeline)
     const openHistoryPanel = (lead: any) => {
         setCurrentLead(lead);
         setSelectedHistory([]);
@@ -96,6 +99,33 @@ export function Clientes() {
             .then(r => r.json())
             .then(d => { if (d.success) setSelectedHistory(d.data); });
     };
+
+    // NUEVA FUNCIÓN: Agregar tarea a Agenda
+    const handleCreateTask = (e: React.FormEvent) => {
+        e.preventDefault();
+        setTaskSaving(true);
+        fetch('/api/agenda.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...newTask, lead_id: currentLead.id })
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    // Incrementa el pendiente, eliminando la sirena de olvido (🔴) en tiempo real
+                    setClients(prev => prev.map(c => c.id === currentLead.id ? { ...c, pending_tasks: (c.pending_tasks || 0) + 1 } : c));
+                    setCurrentLead((prev: any) => ({ ...prev, pending_tasks: (prev.pending_tasks || 0) + 1 }));
+
+                    setIsTaskModalOpen(false);
+                    // Opcional: Refrescar history
+                    openHistoryPanel(currentLead);
+                } else {
+                    alert('No se pudo crear la tarea. Revisa permisos.');
+                }
+            })
+            .finally(() => setTaskSaving(false));
+    };
+
 
     const filteredClients = clients.filter(c => {
         const matchText = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -194,12 +224,10 @@ export function Clientes() {
                             ) : filteredClients.map((client) => (
                                 <tr key={client.id} className="hover:bg-gray-50 transition-colors group">
 
-                                    {/* Botón Detalles + Next Step Alert */}
                                     <td className="px-3 py-2 border-r border-gray-200 text-center relative pointer-events-auto">
                                         <button onClick={() => openHistoryPanel(client)} className="text-[#4a55c2] hover:bg-gray-200 p-1.5 rounded transition-all">
                                             <Eye className="w-5 h-5" />
                                         </button>
-                                        {/* Alerta de Olvido: Si no hay pending tasks, significa que olvidamos hacer un Next-Step */}
                                         {client.pending_tasks == 0 && (
                                             <span className="absolute top-[8px] right-[8px] flex h-3 w-3" title="Atención Obligatoria: Sin Agendamiento Futuro">
                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -210,7 +238,6 @@ export function Clientes() {
                                         )}
                                     </td>
 
-                                    {/* Nombre */}
                                     <td className="px-4 py-2 border-r border-gray-200 font-bold text-gray-900 border-l-[3px] border-l-transparent hover:border-l-brand-600 focus-within:border-l-brand-600">
                                         <input
                                             className="w-full bg-transparent border-0 focus:ring-0 p-0 font-bold hover:bg-gray-100 focus:bg-white focus:outline-none"
@@ -220,7 +247,6 @@ export function Clientes() {
                                         />
                                     </td>
 
-                                    {/* Finanzas / Cotización */}
                                     <td className="px-4 py-2 border-r border-gray-200 text-brand-700 font-semibold flex items-center">
                                         <span className="mr-0.5 text-xs text-gray-400">$</span>
                                         <input
@@ -233,7 +259,6 @@ export function Clientes() {
                                         />
                                     </td>
 
-                                    {/* Rubro */}
                                     <td className="px-4 py-2 border-r border-gray-200">
                                         <input
                                             className="w-full bg-transparent border-0 text-gray-600 focus:ring-0 p-0 text-sm hover:bg-gray-100 focus:bg-white"
@@ -244,7 +269,6 @@ export function Clientes() {
                                         />
                                     </td>
 
-                                    {/* Teléfono y WP */}
                                     <td className="px-4 py-2 border-r border-gray-200 flex items-center justify-between group-hover:bg-gray-50">
                                         <input
                                             className="w-full bg-transparent min-w-[80px] border-0 font-medium text-gray-700 focus:ring-0 p-0 text-sm"
@@ -257,7 +281,6 @@ export function Clientes() {
                                         </button>
                                     </td>
 
-                                    {/* Contactado Select */}
                                     <td className="px-4 py-2 border-r border-gray-200 text-center">
                                         <select
                                             value={client.is_contacted || 'NO'}
@@ -269,7 +292,6 @@ export function Clientes() {
                                         </select>
                                     </td>
 
-                                    {/* Contestó Checkbox */}
                                     <td className="px-4 py-2 border-r border-gray-200 text-center">
                                         <input
                                             type="checkbox"
@@ -279,7 +301,6 @@ export function Clientes() {
                                         />
                                     </td>
 
-                                    {/* WP Enviado Checkbox */}
                                     <td className="px-4 py-2 border-r border-gray-200 text-center">
                                         <input
                                             type="checkbox"
@@ -289,7 +310,6 @@ export function Clientes() {
                                         />
                                     </td>
 
-                                    {/* Notas Multi-linea */}
                                     <td className="p-0 border-r border-gray-200 h-full">
                                         <textarea
                                             className="w-full h-full min-h-[60px] bg-transparent border-0 text-xs text-gray-600 p-2 focus:ring-0 focus:bg-yellow-50 resize-y leading-tight"
@@ -300,7 +320,6 @@ export function Clientes() {
                                         />
                                     </td>
 
-                                    {/* Fecha de Llamada */}
                                     <td className="px-4 py-2 border-r border-gray-200">
                                         <input
                                             type="date"
@@ -310,7 +329,6 @@ export function Clientes() {
                                         />
                                     </td>
 
-                                    {/* Interés con Colores Dinámicos */}
                                     <td className="p-1 h-full">
                                         <textarea
                                             className={`w-full h-full min-h-[60px] text-xs font-semibold p-2 border-0 focus:ring-2 focus:ring-blue-500 resize-y leading-tight transition-colors rounded ${getInterestColor(client.interest_level)}`}
@@ -330,7 +348,7 @@ export function Clientes() {
 
             {/* PANEL LATERAL: EXPEDIENTE Y TRAZABILIDAD TIMELINE */}
             {panelOpen && currentLead && (
-                <div className="fixed inset-0 z-50 flex justify-end">
+                <div className="fixed inset-0 z-40 flex justify-end">
                     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setPanelOpen(false)}></div>
                     <div className="w-full max-w-sm md:max-w-md bg-white h-full shadow-2xl relative flex flex-col animate-in slide-in-from-right duration-300">
                         <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-[#4a55c2] text-white">
@@ -340,12 +358,10 @@ export function Clientes() {
 
                         <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-gray-50">
 
-                            {/* Cabecera del Expediente */}
                             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
                                 <h3 className="text-xl font-bold text-gray-900 mb-1">{currentLead.name}</h3>
                                 <p className="text-sm text-brand-600 font-semibold mb-4">{currentLead.rubro || 'Sin rubro asignado'}</p>
 
-                                {/* Social Tracking */}
                                 <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">
                                     <div className="flex items-center">
                                         <DollarSign className="w-4 h-4 text-gray-400 mr-2" />
@@ -355,7 +371,7 @@ export function Clientes() {
                                             className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full"
                                             value={currentLead.estimated_value || ''}
                                             onChange={(e) => setCurrentLead({ ...currentLead, estimated_value: e.target.value })}
-                                            onBlur={(e) => handleUpdateField(currentLead.id, 'estimated_value', e.target.value)}
+                                            onBlur={(e) => handleUpdateField(currentLead.id, 'estimated_value', parseFloat(e.target.value) || 0)}
                                         />
                                     </div>
                                     <div className="flex items-center">
@@ -370,15 +386,31 @@ export function Clientes() {
                                     </div>
                                 </div>
 
-                                {currentLead.pending_tasks == 0 && (
+                                {currentLead.pending_tasks == 0 ? (
                                     <div className="mt-4 p-3 bg-red-50 text-red-700 text-xs font-bold rounded-lg flex items-start border border-red-100">
                                         <BellRing className="w-4 h-4 mr-2 shrink-0" />
-                                        ALERTA CRM: Este prospecto fue abandonado en el embudo. No tiene acciones calendarizadas. Asigna un seguimiento.
+                                        ALERTA: Sin acciones calendarizadas.
+                                    </div>
+                                ) : (
+                                    <div className="mt-4 p-3 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-100">
+                                        ✔ Cliente en seguimiento activo ({currentLead.pending_tasks} tareas).
                                     </div>
                                 )}
+
+                                {/* BOTÓN FASE 7 PARA CREAR TAREA RÁPIDA */}
+                                <Button
+                                    onClick={() => {
+                                        setNewTask({ type: 'LLAMADA', summary: '', scheduled_for: '' });
+                                        setIsTaskModalOpen(true);
+                                    }}
+                                    className="w-full mt-4 bg-orange-100 text-orange-700 hover:bg-orange-200 shadow-none border border-orange-200 font-bold"
+                                >
+                                    <CalendarClock className="w-4 h-4 mr-2" />
+                                    Agendar Siguiente Paso
+                                </Button>
+
                             </div>
 
-                            {/* LINEA DE TIEMPO / HISTORY */}
                             <div>
                                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-4 flex items-center">
                                     <ArrowRight className="w-4 h-4 mr-2 text-[#4a55c2]" />
@@ -403,7 +435,7 @@ export function Clientes() {
                 </div>
             )}
 
-            {/* Modal Creador */}
+            {/* Modal Nuevo Lead */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <Card className="w-full max-w-lg shadow-2xl animate-in zoom-in-95 relative border-0">
@@ -432,6 +464,58 @@ export function Clientes() {
                     </Card>
                 </div>
             )}
+
+            {/* Modal Fase 7: Crear Tarea a Agenda */}
+            {isTaskModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 shadow-xl">
+                    <Card className="w-full max-w-md shadow-2xl animate-in zoom-in-95 relative border-0 rounded-2xl overflow-hidden">
+                        <div className="bg-gradient-to-r from-orange-500 to-amber-500 p-6 text-white text-center">
+                            <CalendarClock className="w-12 h-12 mx-auto mb-2 opacity-90" />
+                            <h2 className="text-2xl font-black">Siguiente Paso</h2>
+                            <p className="text-orange-100 text-sm mt-1">Conecta esta alerta a tu Agenda Central</p>
+                        </div>
+                        <CardContent className="p-6 bg-white">
+                            <form onSubmit={handleCreateTask} className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">Tipo de Acción</label>
+                                    <select
+                                        className="w-full mt-1 border-gray-200 rounded-lg shadow-sm focus:border-orange-500 focus:ring-orange-500"
+                                        value={newTask.type} onChange={e => setNewTask({ ...newTask, type: e.target.value })}
+                                    >
+                                        <option value="LLAMADA">Llamada Telefónica</option>
+                                        <option value="EMAIL">Enviar Correo Electrónico</option>
+                                        <option value="REUNIÓN">Reunión Virtual/Física</option>
+                                        <option value="ACUERDO">Cerrar Acuerdo</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">Resumen / Descripción</label>
+                                    <Input
+                                        value={newTask.summary} onChange={e => setNewTask({ ...newTask, summary: e.target.value })}
+                                        placeholder="Ej: Llamar para confirmar si el presupuesto fue aceptado..." required
+                                        className="mt-1"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">Fecha y Hora Límite</label>
+                                    <Input
+                                        type="datetime-local"
+                                        value={newTask.scheduled_for} onChange={e => setNewTask({ ...newTask, scheduled_for: e.target.value })}
+                                        required className="mt-1"
+                                    />
+                                </div>
+                                <div className="flex justify-end pt-4 gap-3">
+                                    <Button type="button" variant="outline" onClick={() => setIsTaskModalOpen(false)}>Descartar</Button>
+                                    <Button type="submit" disabled={taskSaving} className="bg-orange-600 hover:bg-orange-700 font-bold">
+                                        {taskSaving ? 'Guardando en Agenda...' : 'Confirmar Tarea'}
+                                    </Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
         </div>
     )
 }
