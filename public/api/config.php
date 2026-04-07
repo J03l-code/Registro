@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 // ============================================
 $db_host = 'localhost'; // En Hostinger esto CASI SIEMPRE es localhost
 $db_user = 'u434851126_registro_usr'; // Usuario de la base de datos
-$db_pass = 'Polloloco2004@'; // Contraseña de DB
+$db_pass = 'Polloloco2004!'; // Contraseña de DB
 $db_name = 'u434851126_registro'; // Nombre de la DB
 
 // Intentar la conexión con PDO (Mejor seguridad)
