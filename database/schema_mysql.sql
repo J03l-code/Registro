@@ -13,7 +13,6 @@ CREATE TABLE IF NOT EXISTS leads (
     wp_sent BOOLEAN DEFAULT FALSE,
     call_date DATE NULL,
     interest_level VARCHAR(255) NULL,
-    -- FASE 6: Campos Financieros y Trazabilidad de Redes Sociales
     estimated_value DECIMAL(10, 2) DEFAULT 0.00,
     social_instagram VARCHAR(255) NULL,
     social_facebook VARCHAR(255) NULL,
@@ -32,7 +31,6 @@ CREATE TABLE IF NOT EXISTS activities (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
 );
--- FASE 6: Trazabilidad del Historial (Timeline Absoluto)
 CREATE TABLE IF NOT EXISTS lead_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     lead_id INT NOT NULL,
@@ -40,11 +38,26 @@ CREATE TABLE IF NOT EXISTS lead_history (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
 );
--- NOTA PARA EL USUARIO: Si tu tabla 'leads' YA existía, debes correr estos comandos de seguridad 
--- en el SQL de phpMyAdmin para actualizar la tabla sin borrar a tus clientes que ya tienes ahí:
+-- FASE 8: Gestor de Archivos (Drive Interno)
+CREATE TABLE IF NOT EXISTS lead_documents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    lead_id INT NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    file_url VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+);
 /*
- ALTER TABLE leads ADD COLUMN estimated_value DECIMAL(10,2) DEFAULT 0.00;
- ALTER TABLE leads ADD COLUMN social_instagram VARCHAR(255) NULL;
- ALTER TABLE leads ADD COLUMN social_facebook VARCHAR(255) NULL;
- ALTER TABLE leads ADD COLUMN social_website VARCHAR(255) NULL;
+ INSTRUCCIONES PARA EL USUARIO:
+ Si tu sistema ya estaba rodando, NO necesitas alterar las tablas viejas.
+ Sólo copia y PEGA este fragmento en tu MySQL (Hostinger) para crear la nueva zona de archivos:
+ 
+ CREATE TABLE IF NOT EXISTS lead_documents (
+ id INT AUTO_INCREMENT PRIMARY KEY,
+ lead_id INT NOT NULL,
+ filename VARCHAR(255) NOT NULL,
+ file_url VARCHAR(255) NOT NULL,
+ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+ );
  */

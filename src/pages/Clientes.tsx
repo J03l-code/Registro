@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Search, Plus, X, MessageCircle, Filter, Eye, DollarSign, AtSign, ArrowRight, BellRing, CalendarClock } from "lucide-react"
+import { Search, Plus, X, MessageCircle, Filter, Eye, DollarSign, AtSign, ArrowRight, BellRing, CalendarClock, Download, UploadCloud, FileText } from "lucide-react"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 import { Card, CardContent } from "../components/ui/Card"
@@ -28,8 +28,10 @@ export function Clientes() {
     const [panelOpen, setPanelOpen] = useState(false);
     const [currentLead, setCurrentLead] = useState<any>(null);
     const [selectedHistory, setSelectedHistory] = useState<any[]>([]);
+    const [leadFiles, setLeadFiles] = useState<any[]>([]); // FASE 8: Archivos en Nube
+    const [uploading, setUploading] = useState(false);
 
-    // ESTADOS NUEVOS PARA CREACIÓN CRUZADA DE AGENDA (FASE 7)
+    // Estados de Tareas Cruzadas
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [taskSaving, setTaskSaving] = useState(false);
     const [newTask, setNewTask] = useState({ type: 'LLAMADA', summary: '', scheduled_for: '' });
@@ -94,13 +96,14 @@ export function Clientes() {
     const openHistoryPanel = (lead: any) => {
         setCurrentLead(lead);
         setSelectedHistory([]);
+        setLeadFiles([]);
         setPanelOpen(true);
-        fetch(`/api/history.php?lead_id=${lead.id}`)
-            .then(r => r.json())
-            .then(d => { if (d.success) setSelectedHistory(d.data); });
+        // Cargar Historial
+        fetch(`/api/history.php?lead_id=${lead.id}`).then(r => r.json()).then(d => { if (d.success) setSelectedHistory(d.data || []); });
+        // Cargar Archivos de este lead
+        fetch(`/api/upload.php?lead_id=${lead.id}`).then(r => r.json()).then(d => { if (d.success) setLeadFiles(d.data || []); });
     };
 
-    // NUEVA FUNCIÓN: Agregar tarea a Agenda
     const handleCreateTask = (e: React.FormEvent) => {
         e.preventDefault();
         setTaskSaving(true);
@@ -108,24 +111,68 @@ export function Clientes() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...newTask, lead_id: currentLead.id })
-        })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    // Incrementa el pendiente, eliminando la sirena de olvido (🔴) en tiempo real
-                    setClients(prev => prev.map(c => c.id === currentLead.id ? { ...c, pending_tasks: (c.pending_tasks || 0) + 1 } : c));
-                    setCurrentLead((prev: any) => ({ ...prev, pending_tasks: (prev.pending_tasks || 0) + 1 }));
-
-                    setIsTaskModalOpen(false);
-                    // Opcional: Refrescar history
-                    openHistoryPanel(currentLead);
-                } else {
-                    alert('No se pudo crear la tarea. Revisa permisos.');
-                }
-            })
-            .finally(() => setTaskSaving(false));
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                setClients(prev => prev.map(c => c.id === currentLead.id ? { ...c, pending_tasks: (c.pending_tasks || 0) + 1 } : c));
+                setCurrentLead((prev: any) => ({ ...prev, pending_tasks: (prev.pending_tasks || 0) + 1 }));
+                setIsTaskModalOpen(false);
+                openHistoryPanel(currentLead);
+            }
+        }).finally(() => setTaskSaving(false));
     };
 
+    // FASE 8: LÓGICA DE CARGA A LA NUBE
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        setUploading(true);
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('lead_id', currentLead.id);
+
+        fetch('/api/upload.php', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    setLeadFiles([{ filename: data.filename, file_url: data.file_url, created_at: new Date().toISOString() }, ...leadFiles]);
+                    openHistoryPanel(currentLead); // refresca el timeline también
+                } else {
+                    alert("Error subiendo: " + data.error);
+                }
+            })
+            .finally(() => setUploading(false));
+    };
+
+    // FASE 9: MOTOR DE EXPORTACIÓN EXCEL CSV BLOB
+    const handleExportCSV = () => {
+        let content = "Nombre,Rubro,Telefono,Cotizacion($),Contactado,Contesto,WhatsApp,Interes,Fecha Llamada,Notas\n";
+        clients.forEach(c => {
+            // Sanear textos para evitar errores de coma en Excel (.CSV)
+            const name = `"${(c.name || '').replace(/"/g, '""')}"`;
+            const rubro = `"${(c.rubro || '').replace(/"/g, '""')}"`;
+            const phone = `"${c.phone}"`;
+            const valor = c.estimated_value || 0;
+            const contactado = `"${c.is_contacted}"`;
+            const contesto = (c.did_answer == 1) ? '"SÍ"' : '"NO"';
+            const wp = (c.wp_sent == 1) ? '"SÍ"' : '"NO"';
+            const interes = `"${(c.interest_level || '').replace(/"/g, '""')}"`;
+            const fecha = `"${c.call_date || ''}"`;
+            const notas = `"${(c.notes || '').replace(/"/g, '""').replace(/\n/g, '  ')}"`; // Evita romper files
+
+            content += `${name},${rubro},${phone},${valor},${contactado},${contesto},${wp},${interes},${fecha},${notas}\n`;
+        });
+
+        const blob = new Blob(["\ufeff", content], { type: 'text/csv;charset=utf-8;' }); // El BOM \ufeff ayuda al reconocimiento UTF-8 de Excel
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Reporte_Clientes_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const filteredClients = clients.filter(c => {
         const matchText = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -149,14 +196,21 @@ export function Clientes() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-brand-900 tracking-tight">Embudo de Llamadas</h1>
-                    <p className="text-gray-500 mt-1 text-sm">Gestiona tus contactos fríos a velocidad de hoja de cálculo.</p>
+                    <p className="text-gray-500 mt-1 text-sm">Gestiona y rastrea tu pipeline a velocidad corporativa.</p>
                 </div>
-                <div className="flex gap-2 w-full sm:w-auto">
+                <div className="flex gap-2 w-full sm:w-auto overflow-x-auto">
                     <div className="relative w-full sm:w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <Input placeholder="Buscar..." className="pl-9 h-10 w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                     </div>
-                    <Button variant="outline" className={`h-10 border-gray-300 ${showFilters ? 'bg-gray-100 text-gray-900' : 'text-gray-600'}`} onClick={() => setShowFilters(!showFilters)}>
+
+                    {/* BOTÓN FASE 9: Exportar a Excel */}
+                    <Button variant="outline" className="h-10 border-green-600 bg-green-50 text-green-700 hover:bg-green-100 flex-shrink-0" onClick={handleExportCSV}>
+                        <Download className="w-4 h-4 mr-2" />
+                        CSV Base
+                    </Button>
+
+                    <Button variant="outline" className={`h-10 border-gray-300 flex-shrink-0 ${showFilters ? 'bg-gray-100 text-gray-900' : 'text-gray-600'}`} onClick={() => setShowFilters(!showFilters)}>
                         <Filter className="w-4 h-4 mr-2" />
                         Filtros
                     </Button>
@@ -223,12 +277,11 @@ export function Clientes() {
                                 <tr><td colSpan={11} className="px-6 py-10 text-center text-gray-500">Cargando datos estilo Excel...</td></tr>
                             ) : filteredClients.map((client) => (
                                 <tr key={client.id} className="hover:bg-gray-50 transition-colors group">
-
                                     <td className="px-3 py-2 border-r border-gray-200 text-center relative pointer-events-auto">
                                         <button onClick={() => openHistoryPanel(client)} className="text-[#4a55c2] hover:bg-gray-200 p-1.5 rounded transition-all">
                                             <Eye className="w-5 h-5" />
                                         </button>
-                                        {client.pending_tasks == 0 && (
+                                        {client.pending_tasks == 0 && client.status !== 'CALIENTE' && (
                                             <span className="absolute top-[8px] right-[8px] flex h-3 w-3" title="Atención Obligatoria: Sin Agendamiento Futuro">
                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                                                 <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 flex items-center justify-center">
@@ -237,7 +290,6 @@ export function Clientes() {
                                             </span>
                                         )}
                                     </td>
-
                                     <td className="px-4 py-2 border-r border-gray-200 font-bold text-gray-900 border-l-[3px] border-l-transparent hover:border-l-brand-600 focus-within:border-l-brand-600">
                                         <input
                                             className="w-full bg-transparent border-0 focus:ring-0 p-0 font-bold hover:bg-gray-100 focus:bg-white focus:outline-none"
@@ -246,99 +298,38 @@ export function Clientes() {
                                             onBlur={(e) => handleUpdateField(client.id, 'name', e.target.value)}
                                         />
                                     </td>
-
                                     <td className="px-4 py-2 border-r border-gray-200 text-brand-700 font-semibold flex items-center">
                                         <span className="mr-0.5 text-xs text-gray-400">$</span>
-                                        <input
-                                            type="number"
-                                            className="w-full bg-transparent border-0 focus:ring-0 p-0 font-medium text-sm hover:bg-gray-100 focus:bg-white"
-                                            value={client.estimated_value || ''}
-                                            placeholder="0.00"
-                                            onChange={(e) => setClients(prev => prev.map(c => c.id === client.id ? { ...c, estimated_value: e.target.value } : c))}
-                                            onBlur={(e) => handleUpdateField(client.id, 'estimated_value', parseFloat(e.target.value) || 0)}
-                                        />
+                                        <input type="number" className="w-full bg-transparent border-0 focus:ring-0 p-0 font-medium text-sm hover:bg-gray-100 focus:bg-white" value={client.estimated_value || ''} placeholder="0.00" onChange={(e) => setClients(prev => prev.map(c => c.id === client.id ? { ...c, estimated_value: e.target.value } : c))} onBlur={(e) => handleUpdateField(client.id, 'estimated_value', parseFloat(e.target.value) || 0)} />
                                     </td>
-
                                     <td className="px-4 py-2 border-r border-gray-200">
-                                        <input
-                                            className="w-full bg-transparent border-0 text-gray-600 focus:ring-0 p-0 text-sm hover:bg-gray-100 focus:bg-white"
-                                            value={client.rubro || ''}
-                                            placeholder="Ingresar..."
-                                            onChange={(e) => setClients(prev => prev.map(c => c.id === client.id ? { ...c, rubro: e.target.value } : c))}
-                                            onBlur={(e) => handleUpdateField(client.id, 'rubro', e.target.value)}
-                                        />
+                                        <input className="w-full bg-transparent border-0 text-gray-600 focus:ring-0 p-0 text-sm hover:bg-gray-100 focus:bg-white" value={client.rubro || ''} placeholder="Ingresar..." onChange={(e) => setClients(prev => prev.map(c => c.id === client.id ? { ...c, rubro: e.target.value } : c))} onBlur={(e) => handleUpdateField(client.id, 'rubro', e.target.value)} />
                                     </td>
-
                                     <td className="px-4 py-2 border-r border-gray-200 flex items-center justify-between group-hover:bg-gray-50">
-                                        <input
-                                            className="w-full bg-transparent min-w-[80px] border-0 font-medium text-gray-700 focus:ring-0 p-0 text-sm"
-                                            value={client.phone || ''}
-                                            onChange={(e) => setClients(prev => prev.map(c => c.id === client.id ? { ...c, phone: e.target.value } : c))}
-                                            onBlur={(e) => handleUpdateField(client.id, 'phone', e.target.value)}
-                                        />
-                                        <button onClick={() => handleWhatsApp(client.name, client.phone)} className="text-green-500 hover:text-green-600 transition-colors outline-none ml-1 p-1 hover:bg-green-50 rounded" title="Abrir WhatsApp">
-                                            <MessageCircle className="w-4 h-4" />
-                                        </button>
+                                        <input className="w-full bg-transparent min-w-[80px] border-0 font-medium text-gray-700 focus:ring-0 p-0 text-sm" value={client.phone || ''} onChange={(e) => setClients(prev => prev.map(c => c.id === client.id ? { ...c, phone: e.target.value } : c))} onBlur={(e) => handleUpdateField(client.id, 'phone', e.target.value)} />
+                                        <button onClick={() => handleWhatsApp(client.name, client.phone)} className="text-green-500 hover:text-green-600 transition-colors outline-none ml-1 p-1 hover:bg-green-50 rounded" title="Abrir WhatsApp"><MessageCircle className="w-4 h-4" /></button>
                                     </td>
-
                                     <td className="px-4 py-2 border-r border-gray-200 text-center">
-                                        <select
-                                            value={client.is_contacted || 'NO'}
-                                            onChange={(e) => handleUpdateField(client.id, 'is_contacted', e.target.value)}
-                                            className={`text-sm rounded-full px-3 py-1 font-semibold border focus:ring-0 cursor-pointer appearance-none text-center outline-none ${client.is_contacted === 'SÍ' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}
-                                        >
+                                        <select value={client.is_contacted || 'NO'} onChange={(e) => handleUpdateField(client.id, 'is_contacted', e.target.value)} className={`text-sm rounded-full px-3 py-1 font-semibold border focus:ring-0 cursor-pointer appearance-none text-center outline-none ${client.is_contacted === 'SÍ' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                                             <option value="SÍ">sí</option>
                                             <option value="NO">no</option>
                                         </select>
                                     </td>
-
                                     <td className="px-4 py-2 border-r border-gray-200 text-center">
-                                        <input
-                                            type="checkbox"
-                                            checked={client.did_answer == 1 || client.did_answer === true}
-                                            onChange={(e) => handleUpdateField(client.id, 'did_answer', e.target.checked)}
-                                            className="w-5 h-5 rounded border-gray-400 text-[#4a55c2] focus:ring-[#4a55c2] cursor-pointer"
-                                        />
+                                        <input type="checkbox" checked={client.did_answer == 1 || client.did_answer === true} onChange={(e) => handleUpdateField(client.id, 'did_answer', e.target.checked)} className="w-5 h-5 rounded border-gray-400 text-[#4a55c2] focus:ring-[#4a55c2] cursor-pointer" />
                                     </td>
-
                                     <td className="px-4 py-2 border-r border-gray-200 text-center">
-                                        <input
-                                            type="checkbox"
-                                            checked={client.wp_sent == 1 || client.wp_sent === true}
-                                            onChange={(e) => handleUpdateField(client.id, 'wp_sent', e.target.checked)}
-                                            className="w-5 h-5 rounded border-gray-400 text-green-500 focus:ring-green-500 cursor-pointer"
-                                        />
+                                        <input type="checkbox" checked={client.wp_sent == 1 || client.wp_sent === true} onChange={(e) => handleUpdateField(client.id, 'wp_sent', e.target.checked)} className="w-5 h-5 rounded border-gray-400 text-green-500 focus:ring-green-500 cursor-pointer" />
                                     </td>
-
                                     <td className="p-0 border-r border-gray-200 h-full">
-                                        <textarea
-                                            className="w-full h-full min-h-[60px] bg-transparent border-0 text-xs text-gray-600 p-2 focus:ring-0 focus:bg-yellow-50 resize-y leading-tight"
-                                            value={client.notes || ''}
-                                            placeholder="Añadir nota..."
-                                            onChange={(e) => setClients(prev => prev.map(c => c.id === client.id ? { ...c, notes: e.target.value } : c))}
-                                            onBlur={(e) => handleUpdateField(client.id, 'notes', e.target.value)}
-                                        />
+                                        <textarea className="w-full h-full min-h-[60px] bg-transparent border-0 text-xs text-gray-600 p-2 focus:ring-0 focus:bg-yellow-50 resize-y leading-tight" value={client.notes || ''} placeholder="Añadir nota..." onChange={(e) => setClients(prev => prev.map(c => c.id === client.id ? { ...c, notes: e.target.value } : c))} onBlur={(e) => handleUpdateField(client.id, 'notes', e.target.value)} />
                                     </td>
-
                                     <td className="px-4 py-2 border-r border-gray-200">
-                                        <input
-                                            type="date"
-                                            className="w-full bg-transparent border-0 text-gray-600 focus:ring-0 p-0 text-xs cursor-text"
-                                            value={client.call_date ? client.call_date.split('T')[0] : ''}
-                                            onChange={(e) => handleUpdateField(client.id, 'call_date', e.target.value)}
-                                        />
+                                        <input type="date" className="w-full bg-transparent border-0 text-gray-600 focus:ring-0 p-0 text-xs cursor-text" value={client.call_date ? client.call_date.split('T')[0] : ''} onChange={(e) => handleUpdateField(client.id, 'call_date', e.target.value)} />
                                     </td>
-
                                     <td className="p-1 h-full">
-                                        <textarea
-                                            className={`w-full h-full min-h-[60px] text-xs font-semibold p-2 border-0 focus:ring-2 focus:ring-blue-500 resize-y leading-tight transition-colors rounded ${getInterestColor(client.interest_level)}`}
-                                            value={client.interest_level || ''}
-                                            placeholder="Escribir (Azul='no desea', Verde='interesa', Gris='no contenta')..."
-                                            onChange={(e) => setClients(prev => prev.map(c => c.id === client.id ? { ...c, interest_level: e.target.value } : c))}
-                                            onBlur={(e) => handleUpdateField(client.id, 'interest_level', e.target.value)}
-                                        />
+                                        <textarea className={`w-full h-full min-h-[60px] text-xs font-semibold p-2 border-0 focus:ring-2 focus:ring-blue-500 resize-y leading-tight transition-colors rounded ${getInterestColor(client.interest_level)}`} value={client.interest_level || ''} placeholder="Escribir (Azul='no desea', Verde='interesa', Gris='no contenta')..." onChange={(e) => setClients(prev => prev.map(c => c.id === client.id ? { ...c, interest_level: e.target.value } : c))} onBlur={(e) => handleUpdateField(client.id, 'interest_level', e.target.value)} />
                                     </td>
-
                                 </tr>
                             ))}
                         </tbody>
@@ -346,7 +337,7 @@ export function Clientes() {
                 </CardContent>
             </Card>
 
-            {/* PANEL LATERAL: EXPEDIENTE Y TRAZABILIDAD TIMELINE */}
+            {/* PANEL LATERAL: EXPEDIENTE Y TRAZABILIDAD TIMELINE Y CLOUD DRIVE */}
             {panelOpen && currentLead && (
                 <div className="fixed inset-0 z-40 flex justify-end">
                     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setPanelOpen(false)}></div>
@@ -365,31 +356,17 @@ export function Clientes() {
                                 <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">
                                     <div className="flex items-center">
                                         <DollarSign className="w-4 h-4 text-gray-400 mr-2" />
-                                        <input
-                                            type="number"
-                                            placeholder="Valor de Cotización ($)"
-                                            className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full"
-                                            value={currentLead.estimated_value || ''}
-                                            onChange={(e) => setCurrentLead({ ...currentLead, estimated_value: e.target.value })}
-                                            onBlur={(e) => handleUpdateField(currentLead.id, 'estimated_value', parseFloat(e.target.value) || 0)}
-                                        />
+                                        <input type="number" placeholder="Valor de Cotización ($)" className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full" value={currentLead.estimated_value || ''} onChange={(e) => setCurrentLead({ ...currentLead, estimated_value: e.target.value })} onBlur={(e) => handleUpdateField(currentLead.id, 'estimated_value', parseFloat(e.target.value) || 0)} />
                                     </div>
                                     <div className="flex items-center">
                                         <AtSign className="w-4 h-4 text-pink-500 mr-2" />
-                                        <input
-                                            placeholder="@usuario_instagram"
-                                            className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full"
-                                            value={currentLead.social_instagram || ''}
-                                            onChange={(e) => setCurrentLead({ ...currentLead, social_instagram: e.target.value })}
-                                            onBlur={(e) => handleUpdateField(currentLead.id, 'social_instagram', e.target.value)}
-                                        />
+                                        <input placeholder="@usuario_instagram" className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full" value={currentLead.social_instagram || ''} onChange={(e) => setCurrentLead({ ...currentLead, social_instagram: e.target.value })} onBlur={(e) => handleUpdateField(currentLead.id, 'social_instagram', e.target.value)} />
                                     </div>
                                 </div>
 
                                 {currentLead.pending_tasks == 0 ? (
                                     <div className="mt-4 p-3 bg-red-50 text-red-700 text-xs font-bold rounded-lg flex items-start border border-red-100">
-                                        <BellRing className="w-4 h-4 mr-2 shrink-0" />
-                                        ALERTA: Sin acciones calendarizadas.
+                                        <BellRing className="w-4 h-4 mr-2 shrink-0" /> ALERTA: Sin acciones calendarizadas.
                                     </div>
                                 ) : (
                                     <div className="mt-4 p-3 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-100">
@@ -397,18 +374,30 @@ export function Clientes() {
                                     </div>
                                 )}
 
-                                {/* BOTÓN FASE 7 PARA CREAR TAREA RÁPIDA */}
-                                <Button
-                                    onClick={() => {
-                                        setNewTask({ type: 'LLAMADA', summary: '', scheduled_for: '' });
-                                        setIsTaskModalOpen(true);
-                                    }}
-                                    className="w-full mt-4 bg-orange-100 text-orange-700 hover:bg-orange-200 shadow-none border border-orange-200 font-bold"
-                                >
-                                    <CalendarClock className="w-4 h-4 mr-2" />
-                                    Agendar Siguiente Paso
+                                <Button onClick={() => { setNewTask({ type: 'LLAMADA', summary: '', scheduled_for: '' }); setIsTaskModalOpen(true); }} className="w-full mt-4 bg-orange-100 text-orange-700 hover:bg-orange-200 shadow-none border border-orange-200 font-bold">
+                                    <CalendarClock className="w-4 h-4 mr-2" /> Agendar Siguiente Paso
                                 </Button>
+                            </div>
 
+                            {/* FASE 8: DRIVE PERSONAL */}
+                            <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">
+                                <h3 className="text-sm font-bold text-blue-900 mb-3 flex items-center">
+                                    <UploadCloud className="w-4 h-4 mr-2" />
+                                    Archivos Adjuntos
+                                </h3>
+                                <div className="space-y-2 mb-3">
+                                    {leadFiles.length === 0 ? <p className="text-xs text-blue-400 font-medium">Vacío (Sin contratos/recibos)</p> :
+                                        leadFiles.map((file, i) => (
+                                            <a key={i} href={file.file_url} target="_blank" rel="noreferrer" className="flex items-center text-xs bg-white border border-blue-100 p-2 rounded hover:bg-blue-100 transition-colors">
+                                                <FileText className="w-3 h-3 mr-2 text-blue-500 flex-shrink-0" />
+                                                <span className="truncate flex-1 text-blue-800 font-medium">{file.filename}</span>
+                                            </a>
+                                        ))}
+                                </div>
+                                <label className="text-xs cursor-pointer bg-white text-blue-600 font-semibold border-2 border-dashed border-blue-300 w-full rounded p-3 text-center flex items-center justify-center hover:bg-blue-50 transition-colors">
+                                    {uploading ? 'Subiendo...' : 'Agregar Archivo PDF / JPG'}
+                                    <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                                </label>
                             </div>
 
                             <div>
@@ -435,7 +424,7 @@ export function Clientes() {
                 </div>
             )}
 
-            {/* Modal Nuevo Lead */}
+            {/* MODALES CLÁSICOS */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <Card className="w-full max-w-lg shadow-2xl animate-in zoom-in-95 relative border-0">
@@ -454,7 +443,6 @@ export function Clientes() {
                                     <Input label="Rubro" value={newClient.rubro} onChange={(e) => setNewClient({ ...newClient, rubro: e.target.value })} />
                                     <Input label="Cotización ($)" type="number" value={newClient.estimated_value} onChange={(e) => setNewClient({ ...newClient, estimated_value: parseFloat(e.target.value) })} />
                                 </div>
-
                                 <div className="pt-4 flex justify-end pb-2">
                                     <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} className="mr-3">Cancelar</Button>
                                     <Button type="submit" className="bg-[#4a55c2] hover:bg-[#3b43a1]" disabled={saving}>Guardar Prospecto</Button>
@@ -465,7 +453,6 @@ export function Clientes() {
                 </div>
             )}
 
-            {/* Modal Fase 7: Crear Tarea a Agenda */}
             {isTaskModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 shadow-xl">
                     <Card className="w-full max-w-md shadow-2xl animate-in zoom-in-95 relative border-0 rounded-2xl overflow-hidden">
@@ -478,10 +465,7 @@ export function Clientes() {
                             <form onSubmit={handleCreateTask} className="space-y-4">
                                 <div>
                                     <label className="text-xs font-semibold text-gray-500 uppercase">Tipo de Acción</label>
-                                    <select
-                                        className="w-full mt-1 border-gray-200 rounded-lg shadow-sm focus:border-orange-500 focus:ring-orange-500"
-                                        value={newTask.type} onChange={e => setNewTask({ ...newTask, type: e.target.value })}
-                                    >
+                                    <select className="w-full mt-1 border-gray-200 rounded-lg shadow-sm focus:border-orange-500 focus:ring-orange-500" value={newTask.type} onChange={e => setNewTask({ ...newTask, type: e.target.value })}>
                                         <option value="LLAMADA">Llamada Telefónica</option>
                                         <option value="EMAIL">Enviar Correo Electrónico</option>
                                         <option value="REUNIÓN">Reunión Virtual/Física</option>
@@ -489,26 +473,16 @@ export function Clientes() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-semibold text-gray-500 uppercase">Resumen / Descripción</label>
-                                    <Input
-                                        value={newTask.summary} onChange={e => setNewTask({ ...newTask, summary: e.target.value })}
-                                        placeholder="Ej: Llamar para confirmar si el presupuesto fue aceptado..." required
-                                        className="mt-1"
-                                    />
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">Resumen</label>
+                                    <Input value={newTask.summary} onChange={e => setNewTask({ ...newTask, summary: e.target.value })} placeholder="Ej: Llamar..." required className="mt-1" />
                                 </div>
                                 <div>
-                                    <label className="text-xs font-semibold text-gray-500 uppercase">Fecha y Hora Límite</label>
-                                    <Input
-                                        type="datetime-local"
-                                        value={newTask.scheduled_for} onChange={e => setNewTask({ ...newTask, scheduled_for: e.target.value })}
-                                        required className="mt-1"
-                                    />
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">Fecha y Hora</label>
+                                    <Input type="datetime-local" value={newTask.scheduled_for} onChange={e => setNewTask({ ...newTask, scheduled_for: e.target.value })} required className="mt-1" />
                                 </div>
                                 <div className="flex justify-end pt-4 gap-3">
                                     <Button type="button" variant="outline" onClick={() => setIsTaskModalOpen(false)}>Descartar</Button>
-                                    <Button type="submit" disabled={taskSaving} className="bg-orange-600 hover:bg-orange-700 font-bold">
-                                        {taskSaving ? 'Guardando en Agenda...' : 'Confirmar Tarea'}
-                                    </Button>
+                                    <Button type="submit" disabled={taskSaving} className="bg-orange-600 hover:bg-orange-700 font-bold">{taskSaving ? 'Guardando...' : 'Confirmar Tarea'}</Button>
                                 </div>
                             </form>
                         </CardContent>
