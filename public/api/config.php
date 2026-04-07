@@ -15,9 +15,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 // CREDENCIALES HOSTINGER (Rellenar en Hostinger)
 // ============================================
 $db_host = 'localhost'; // En Hostinger esto CASI SIEMPRE es localhost
-$db_user = 'u123456789_TU_USUARIO'; // Usuario de la base de datos
-$db_pass = 'TuContraseñaSecreta123*'; // Contraseña de DB
-$db_name = 'u123456789_TU_DB'; // Nombre de la DB
+$db_user = 'u434851126_registro_usr'; // Usuario de la base de datos
+$db_pass = 'Polloloco2004@'; // Contraseña de DB
+$db_name = 'u434851126_registro'; // Nombre de la DB
 
 // Intentar la conexión con PDO (Mejor seguridad)
 try {
