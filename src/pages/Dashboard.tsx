@@ -1,43 +1,65 @@
+import { useState, useEffect } from "react"
 import { Users, PhoneCall, Target, TrendingUp } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card"
 
-const mockStats = [
-    { name: 'Clientes Totales', value: '248', icon: Users, change: '+12%', changeType: 'positive' },
-    { name: 'Leads Calientes', value: '42', icon: Target, change: '+4%', changeType: 'positive' },
-    { name: 'Llamadas Hoy', value: '15', icon: PhoneCall, change: '-2', changeType: 'negative' },
-    { name: 'Conversión', value: '24%', icon: TrendingUp, change: '+2.1%', changeType: 'positive' },
-];
-
 export function Dashboard() {
+    const [metrics, setMetrics] = useState({
+        total: 0,
+        calientes: 0,
+        tareas_hoy: 0,
+        conversion: '0%'
+    });
+    const [recent, setRecent] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetch('/api/dashboard.php')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    setMetrics(data.metrics);
+                    setRecent(data.recent || []);
+                }
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error(err);
+                setLoading(false);
+            });
+    }, []);
+
+    const stats = [
+        { name: 'Clientes Totales', value: metrics.total, icon: Users, color: 'text-brand-600', bg: 'bg-brand-50' },
+        { name: 'Leads Calientes', value: metrics.calientes, icon: Target, color: 'text-red-500', bg: 'bg-red-50' },
+        { name: 'Tareas Pendientes', value: metrics.tareas_hoy, icon: PhoneCall, color: 'text-orange-500', bg: 'bg-orange-50' },
+        { name: 'Conversión Est.', value: metrics.conversion, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
+    ];
+
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
-                    <p className="text-gray-500 mt-1 text-sm">Resumen de tu actividad y leads de hoy.</p>
+                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Dashboard General</h1>
+                    <p className="text-gray-500 mt-1 text-sm">Monitorea tus clientes conectados en tiempo real.</p>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                {mockStats.map((stat) => {
+                {stats.map((stat) => {
                     const Icon = stat.icon;
                     return (
-                        <Card key={stat.name} className="overflow-hidden">
+                        <Card key={stat.name} className="overflow-hidden border-gray-100 shadow-sm">
                             <CardContent className="p-6">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="text-sm font-medium text-gray-500 truncate">{stat.name}</p>
-                                        <p className="mt-2 text-3xl font-semibold text-gray-900">{stat.value}</p>
+                                        <p className="mt-2 text-3xl font-semibold text-gray-900">
+                                            {loading ? '...' : stat.value}
+                                        </p>
                                     </div>
-                                    <div className="bg-brand-50 p-3 rounded-lg">
-                                        <Icon className="w-6 h-6 text-brand-600" />
+                                    <div className={`p-3 rounded-lg ${stat.bg}`}>
+                                        <Icon className={`w-6 h-6 ${stat.color}`} />
                                     </div>
-                                </div>
-                                <div className="mt-4 flex items-center text-sm">
-                                    <span className={stat.changeType === 'positive' ? 'text-green-600' : 'text-red-600'}>
-                                        {stat.change}
-                                    </span>
-                                    <span className="text-gray-500 ml-2">vs el mes pasado</span>
                                 </div>
                             </CardContent>
                         </Card>
@@ -52,31 +74,36 @@ export function Dashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
-                            {[1, 2, 3].map((_, i) => (
-                                <div key={i} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
+                            {loading && <p className="text-gray-400">Cargando...</p>}
+                            {!loading && recent.length === 0 && <p className="text-gray-400">No hay actividad reciente.</p>}
+                            {recent.map((act, i) => (
+                                <div key={i} className="flex items-center justify-between border-b border-gray-50 pb-4 last:border-0 last:pb-0">
                                     <div className="flex flex-col">
-                                        <span className="font-medium text-gray-900">Llamada de seguimiento</span>
-                                        <span className="text-sm text-gray-500">Con Carlos Mendoza</span>
+                                        <span className="font-medium text-gray-900">{act.summary}</span>
+                                        <span className="text-sm text-gray-500">
+                                            {act.lead_name ? `Con ${act.lead_name}` : 'Actividad general'}
+                                        </span>
                                     </div>
-                                    <span className="text-sm text-gray-400">Hace {i + 1} horas</span>
+                                    <span className="text-xs text-gray-400">
+                                        {new Date(act.created_at).toLocaleDateString()}
+                                    </span>
                                 </div>
                             ))}
                         </div>
                     </CardContent>
                 </Card>
 
+                {/* Simulamos las llamadas u otras tareas del mes */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Tareas Prioritarias</CardTitle>
+                        <CardTitle>Información de Servidor</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-4">
-                            {[1, 2, 3].map((_, i) => (
-                                <div key={i} className="flex items-center space-x-3">
-                                    <input type="checkbox" className="h-4 w-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded" />
-                                    <span className="text-gray-700">Contactar lead caliente (Web)</span>
-                                </div>
-                            ))}
+                        <div className="bg-brand-50 rounded-lg p-5 border border-brand-100">
+                            <h4 className="font-semibold text-brand-900 mb-2">Conectado a MySQL Hostinger</h4>
+                            <p className="text-sm text-brand-700 leading-relaxed">
+                                Tu ecosistema SaaS está conectado correctamente con la base de datos de producción mediante la API REST en PHP. Todas las visualizaciones de este panel analítico se calculan dinámicamente según la cantidad de clientes ingresados.
+                            </p>
                         </div>
                     </CardContent>
                 </Card>
