@@ -15,15 +15,22 @@ try {
     $calientes = $pdo->query("SELECT COUNT(*) as c FROM leads WHERE status='CALIENTE'")->fetch(PDO::FETCH_ASSOC)['c'];
 
     // 3. Tareas Prioritarias hoy
-    $hoy = $pdo->query("SELECT COUNT(*) as c FROM activities WHERE DATE(scheduled_for) = CURDATE() AND completed = FALSE")->fetch(PDO::FETCH_ASSOC)['c'];
+    $hoy = $pdo->query("SELECT COUNT(*) as c FROM activities WHERE DATE(scheduled_for) <= CURDATE() AND completed = FALSE")->fetch(PDO::FETCH_ASSOC)['c'];
 
-    // 4. Últimas llamadas / actividad
+    // 4. Últimas llamadas / actividad (Sacadas desde History para más precisión)
     $actividades = $pdo->query("
-        SELECT a.summary, a.created_at, l.name as lead_name 
-        FROM activities a 
+        SELECT a.event_desc as summary, a.created_at, l.name as lead_name 
+        FROM lead_history a 
         LEFT JOIN leads l ON a.lead_id = l.id 
-        ORDER BY a.created_at DESC LIMIT 5
+        ORDER BY a.created_at DESC LIMIT 6
     ")->fetchAll(PDO::FETCH_ASSOC);
+
+    // 5. NUEVO: PIPELINE ECONÓMICO FINANCIERO ($)
+    $pipeline = $pdo->query("SELECT SUM(estimated_value) as val FROM leads WHERE status != 'CALIENTE'")->fetch(PDO::FETCH_ASSOC)['val'] ?? 0;
+
+    // 6. INGRESOS CERRADOS FINANCIEROS ($)
+    $ingresos = $pdo->query("SELECT SUM(estimated_value) as val FROM leads WHERE status = 'CALIENTE'")->fetch(PDO::FETCH_ASSOC)['val'] ?? 0;
+
 
     echo json_encode([
         "success" => true,
@@ -31,7 +38,9 @@ try {
             "total" => $total,
             "calientes" => $calientes,
             "tareas_hoy" => $hoy,
-            "conversion" => ($total > 0) ? round(($calientes / $total) * 100) . '%' : '0%'
+            "conversion" => ($total > 0) ? round(($calientes / $total) * 100) . '%' : '0%',
+            "pipeline" => floatval($pipeline),
+            "revenue" => floatval($ingresos)
         ],
         "recent" => $actividades
     ]);
