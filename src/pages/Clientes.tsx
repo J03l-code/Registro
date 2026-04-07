@@ -1,33 +1,62 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Search, Plus, MoreHorizontal, MessageCircle, X } from "lucide-react"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 import { Badge } from "../components/ui/Badge"
 import { Card, CardContent } from "../components/ui/Card"
 
-const initialClients = [
-    { id: 1, name: 'Juan Pérez', phone: '+525551234567', email: 'juan@example.com', status: 'CALIENTE', source: 'Web' },
-    { id: 2, name: 'María García', phone: '+525559876543', email: 'maria@example.com', status: 'TIBIO', source: 'Referido' },
-    { id: 3, name: 'Carlos López', phone: '+525555555555', email: 'carlos@example.com', status: 'FRÍO', source: 'Campaña FB' },
-];
-
 export function Clientes() {
-    const [clients, setClients] = useState(initialClients);
+    const [clients, setClients] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [newClient, setNewClient] = useState({ name: '', phone: '', email: '', status: 'FRÍO', source: 'Web' });
+
+    // 1. Cargar Base de datos de Hostinger
+    useEffect(() => {
+        fetch('/api/clientes.php')
+            .then(r => r.json())
+            .then(data => {
+                if (Array.isArray(data)) setClients(data);
+                setLoading(false);
+            })
+            .catch(e => {
+                console.error("No se pudo contactar la API", e);
+                setLoading(false);
+            });
+    }, []);
 
     const handleWhatsApp = (name: string, phone: string) => {
         const text = encodeURIComponent(`Hola ${name}, te contacto de [MiEmprendimiento], ¿cómo podemos ayudarte hoy?`);
         window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${text}`, '_blank');
     };
 
+    // 2. Guardar Permanentemente en la Base de datos
     const handleAddClient = (e: React.FormEvent) => {
         e.preventDefault();
-        const client = { ...newClient, id: clients.length + 1 };
-        setClients([client, ...clients]);
-        setIsModalOpen(false);
-        setNewClient({ name: '', phone: '', email: '', status: 'FRÍO', source: 'Web' });
+        setSaving(true);
+
+        fetch('/api/clientes.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newClient)
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.client) {
+                    setClients([data.client, ...clients]);
+                    setIsModalOpen(false);
+                    setNewClient({ name: '', phone: '', email: '', status: 'FRÍO', source: 'Web' });
+                } else {
+                    alert("Error de Hostinger: " + (data.error || "Datos inválidos."));
+                }
+            })
+            .catch(err => {
+                alert("Error de red contactando al servidor.");
+                console.error(err);
+            })
+            .finally(() => setSaving(false));
     };
 
     const filteredClients = clients.filter(c =>
@@ -40,7 +69,7 @@ export function Clientes() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Gestión de Clientes</h1>
-                    <p className="text-gray-500 mt-1 text-sm">Administra tu cartera de clientes y prospectos.</p>
+                    <p className="text-gray-500 mt-1 text-sm">Administra tu cartera de clientes y prospectos reales.</p>
                 </div>
                 <Button className="bg-brand-600 hover:bg-brand-700 h-10" onClick={() => setIsModalOpen(true)}>
                     <Plus className="w-4 h-4 mr-2" />
@@ -73,7 +102,9 @@ export function Clientes() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredClients.map((client) => (
+                                {loading ? (
+                                    <tr><td colSpan={5} className="px-6 py-10 text-center text-gray-500">Cargando base de datos...</td></tr>
+                                ) : filteredClients.map((client) => (
                                     <tr key={client.id} className="hover:bg-gray-50/50 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="font-medium text-gray-900">{client.name}</div>
@@ -106,10 +137,10 @@ export function Clientes() {
                                         </td>
                                     </tr>
                                 ))}
-                                {filteredClients.length === 0 && (
+                                {!loading && filteredClients.length === 0 && (
                                     <tr>
                                         <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
-                                            No se encontraron clientes que coincidan con la búsqueda.
+                                            No hay clientes guardados en la base de datos de Hostinger.
                                         </td>
                                     </tr>
                                 )}
@@ -130,7 +161,7 @@ export function Clientes() {
                             <X className="w-5 h-5" />
                         </button>
                         <div className="p-6 border-b border-gray-100">
-                            <h2 className="text-xl font-bold text-gray-900">Registrar Cliente</h2>
+                            <h2 className="text-xl font-bold text-gray-900">Registrar Cliente Real</h2>
                         </div>
                         <CardContent className="p-6">
                             <form onSubmit={handleAddClient} className="space-y-4">
@@ -179,8 +210,8 @@ export function Clientes() {
                                     <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} className="mr-2 text-gray-600">
                                         Cancelar
                                     </Button>
-                                    <Button type="submit" className="bg-brand-600 hover:bg-brand-700">
-                                        Guardar Cliente
+                                    <Button type="submit" className="bg-brand-600 hover:bg-brand-700" disabled={saving}>
+                                        {saving ? "Guardando DB..." : "Guardar Cliente"}
                                     </Button>
                                 </div>
                             </form>
