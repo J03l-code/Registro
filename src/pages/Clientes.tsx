@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { Search, Plus, X, MessageCircle, Filter, Eye, DollarSign, AtSign, ArrowRight, BellRing, CalendarClock, Download, UploadCloud, FileText, LayoutList, KanbanSquare } from "lucide-react"
+import { QuoteGenerator } from "../components/QuoteGenerator"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 import { Card, CardContent } from "../components/ui/Card"
@@ -40,6 +41,9 @@ export function Clientes() {
     const [selectedHistory, setSelectedHistory] = useState<any[]>([]);
     const [leadFiles, setLeadFiles] = useState<any[]>([]);
     const [uploading, setUploading] = useState(false);
+
+    // Tarea Fase 11
+    const [isQuoteOpen, setIsQuoteOpen] = useState(false);
 
     // Estados de Tareas Cruzadas
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -488,6 +492,10 @@ export function Clientes() {
                                         <CalendarClock className="w-4 h-4 mr-2" /> Agendar Siguiente Paso
                                     </Button>
                                 )}
+
+                                <Button onClick={() => setIsQuoteOpen(true)} className="w-full mt-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 shadow-none border border-indigo-200 font-bold">
+                                    <FileText className="w-4 h-4 mr-2" /> Generar Cotización PDF Formal
+                                </Button>
                             </div>
 
                             <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">
@@ -595,6 +603,10 @@ export function Clientes() {
                         </CardContent>
                     </Card>
                 </div>
+            )}
+
+            {isQuoteOpen && currentLead && (
+                <QuoteGenerator lead={currentLead} onClose={() => setIsQuoteOpen(false)} />
             )}
 
         </div>
