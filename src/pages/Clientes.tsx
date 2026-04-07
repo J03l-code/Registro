@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Search, Plus, MoreHorizontal, MessageCircle } from "lucide-react"
+import { Search, Plus, MoreHorizontal, MessageCircle, X } from "lucide-react"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 import { Badge } from "../components/ui/Badge"
@@ -12,12 +12,22 @@ const initialClients = [
 ];
 
 export function Clientes() {
-    const [clients] = useState(initialClients);
+    const [clients, setClients] = useState(initialClients);
     const [searchTerm, setSearchTerm] = useState("");
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [newClient, setNewClient] = useState({ name: '', phone: '', email: '', status: 'FRÍO', source: 'Web' });
 
     const handleWhatsApp = (name: string, phone: string) => {
         const text = encodeURIComponent(`Hola ${name}, te contacto de [MiEmprendimiento], ¿cómo podemos ayudarte hoy?`);
         window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${text}`, '_blank');
+    };
+
+    const handleAddClient = (e: React.FormEvent) => {
+        e.preventDefault();
+        const client = { ...newClient, id: clients.length + 1 };
+        setClients([client, ...clients]);
+        setIsModalOpen(false);
+        setNewClient({ name: '', phone: '', email: '', status: 'FRÍO', source: 'Web' });
     };
 
     const filteredClients = clients.filter(c =>
@@ -26,13 +36,13 @@ export function Clientes() {
     );
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 relative">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Gestión de Clientes</h1>
                     <p className="text-gray-500 mt-1 text-sm">Administra tu cartera de clientes y prospectos.</p>
                 </div>
-                <Button className="bg-brand-600 hover:bg-brand-700 h-10">
+                <Button className="bg-brand-600 hover:bg-brand-700 h-10" onClick={() => setIsModalOpen(true)}>
                     <Plus className="w-4 h-4 mr-2" />
                     Nuevo Cliente
                 </Button>
@@ -49,7 +59,6 @@ export function Clientes() {
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    {/* Aquí irían filtros adicionales */}
                 </div>
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
@@ -109,6 +118,76 @@ export function Clientes() {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Modal para Crear Cliente */}
+            {isModalOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-md shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+                        <button
+                            onClick={() => setIsModalOpen(false)}
+                            className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                        <div className="p-6 border-b border-gray-100">
+                            <h2 className="text-xl font-bold text-gray-900">Registrar Cliente</h2>
+                        </div>
+                        <CardContent className="p-6">
+                            <form onSubmit={handleAddClient} className="space-y-4">
+                                <Input
+                                    label="Nombre Completo"
+                                    value={newClient.name}
+                                    onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
+                                    required
+                                />
+                                <Input
+                                    label="Teléfono (Con código de país)"
+                                    value={newClient.phone}
+                                    onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
+                                    placeholder="+521234567890"
+                                    required
+                                />
+                                <Input
+                                    label="Correo Electrónico"
+                                    type="email"
+                                    value={newClient.email}
+                                    onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
+                                    required
+                                />
+                                <div className="flex flex-col gap-1.5 w-full">
+                                    <label className="text-sm font-medium text-gray-700">Estado del Lead</label>
+                                    <select
+                                        className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                                        value={newClient.status}
+                                        onChange={(e) => setNewClient({ ...newClient, status: e.target.value })}
+                                    >
+                                        <option value="FRÍO">Frío</option>
+                                        <option value="TIBIO">Tibio</option>
+                                        <option value="CALIENTE">Caliente</option>
+                                    </select>
+                                </div>
+                                <div className="flex flex-col gap-1.5 w-full">
+                                    <label className="text-sm font-medium text-gray-700">Origen de Contacto</label>
+                                    <Input
+                                        value={newClient.source}
+                                        onChange={(e) => setNewClient({ ...newClient, source: e.target.value })}
+                                        placeholder="Ej: Web, Referido, Facebook"
+                                        required
+                                    />
+                                </div>
+                                <div className="pt-4 flex justify-end">
+                                    <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} className="mr-2 text-gray-600">
+                                        Cancelar
+                                    </Button>
+                                    <Button type="submit" className="bg-brand-600 hover:bg-brand-700">
+                                        Guardar Cliente
+                                    </Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div>
     )
 }
