@@ -45,5 +45,30 @@ switch ($method) {
             echo json_encode(["error" => "El resumen es requerido."]);
         }
         break;
+
+    case 'PUT':
+        $data = json_decode(file_get_contents("php://input"), true);
+        if (isset($data['id'])) {
+            try {
+                if (isset($data['action']) && $data['action'] === 'complete') {
+                    $stmt = $pdo->prepare("UPDATE activities SET completed = TRUE WHERE id = :id");
+                    $stmt->execute([':id' => $data['id']]);
+                } else if (isset($data['action']) && $data['action'] === 'reschedule' && isset($data['newDate'])) {
+                    $stmt = $pdo->prepare("UPDATE activities SET scheduled_for = :newDate WHERE id = :id");
+                    $stmt->execute([
+                        ':id' => $data['id'],
+                        ':newDate' => $data['newDate']
+                    ]);
+                }
+                echo json_encode(["success" => true]);
+            } catch (PDOException $e) {
+                http_response_code(500);
+                echo json_encode(["error" => "Error editando tarea: " . $e->getMessage()]);
+            }
+        } else {
+            http_response_code(400);
+            echo json_encode(["error" => "ID es requerido."]);
+        }
+        break;
 }
 ?>

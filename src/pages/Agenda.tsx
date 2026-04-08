@@ -12,6 +12,10 @@ export function Agenda() {
     const [newTask, setNewTask] = useState({ summary: '', type: 'LLAMADA', date: '' });
     const [saving, setSaving] = useState(false);
 
+    // Estados para Reprogramar
+    const [reschedulingTask, setReschedulingTask] = useState<any>(null);
+    const [newDate, setNewDate] = useState("");
+
     const fetchAgenda = () => {
         setLoading(true);
         fetch('/api/agenda.php')
@@ -45,6 +49,34 @@ export function Agenda() {
                 }
             })
             .finally(() => setSaving(false));
+    };
+
+    const handleCompleteTask = (id: number) => {
+        if (!confirm("¿Marcar esta tarea como completada?")) return;
+        fetch('/api/agenda.php', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, action: 'complete' })
+        }).then(r => r.json()).then(data => {
+            if (data.success) fetchAgenda();
+        });
+    };
+
+    const handleRescheduleTask = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!reschedulingTask || !newDate) return;
+        setSaving(true);
+        fetch('/api/agenda.php', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: reschedulingTask.id, action: 'reschedule', newDate })
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                fetchAgenda();
+                setReschedulingTask(null);
+                setNewDate("");
+            }
+        }).finally(() => setSaving(false));
     };
 
     return (
@@ -98,8 +130,8 @@ export function Agenda() {
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <Button variant="outline" size="sm">Reprogramar</Button>
-                                        <Button size="sm" className="bg-brand-600 text-white">Completar</Button>
+                                        <Button variant="outline" size="sm" onClick={() => { setReschedulingTask(item); setNewDate(item.scheduled_for.slice(0, 16)); }}>Reprogramar</Button>
+                                        <Button size="sm" className="bg-brand-600 text-white" onClick={() => handleCompleteTask(item.id)}>Completar</Button>
                                     </div>
                                 </div>
                             </li>
@@ -156,6 +188,35 @@ export function Agenda() {
                                 </div>
                             </form>
                         </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* Modal Reprogramar Tarea */}
+            {reschedulingTask && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-sm animate-in zoom-in-95 duration-200 shadow-xl relative text-center border-0 border-t-4 border-t-orange-500">
+                        <div className="p-6">
+                            <Clock className="w-12 h-12 text-orange-500 mx-auto mb-3" />
+                            <h2 className="text-xl font-bold text-gray-900 mb-1">Reprogramar Tarea</h2>
+                            <p className="text-sm text-gray-500 mb-6 truncate">"{reschedulingTask.summary}"</p>
+
+                            <form onSubmit={handleRescheduleTask} className="space-y-4">
+                                <Input
+                                    label="Selecciona Nueva Fecha y Hora"
+                                    type="datetime-local"
+                                    required
+                                    value={newDate}
+                                    onChange={(e) => setNewDate(e.target.value)}
+                                />
+                                <div className="pt-2 flex justify-center gap-3">
+                                    <Button type="button" variant="ghost" onClick={() => setReschedulingTask(null)} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700">Cancelar</Button>
+                                    <Button type="submit" disabled={saving} className="w-full bg-orange-500 hover:bg-orange-600">
+                                        {saving ? 'Guardando...' : 'Confirmar'}
+                                    </Button>
+                                </div>
+                            </form>
+                        </div>
                     </Card>
                 </div>
             )}
