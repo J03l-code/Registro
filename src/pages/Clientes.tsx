@@ -20,7 +20,7 @@ const KANBAN_COLS = [
     { id: 'CALIENTE', title: 'Cerrado / Pagado (Calientes)', bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-800' }
 ];
 
-export function Clientes() {
+export function Clientes({ filterMode = 'main' }: { filterMode?: 'main' | 'archived' }) {
     const [clients, setClients] = useState<any[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -236,15 +236,28 @@ export function Clientes() {
         if (filterWp === "SÍ") matchWp = (c.wp_sent == 1 || c.wp_sent === true);
         if (filterWp === "NO") matchWp = (c.wp_sent == 0 || c.wp_sent === false);
 
-        return matchText && matchContacted && matchAnswered && matchWp;
+        const interest = (c.interest_level || '').toLowerCase();
+        const noInteresado = interest.includes('no desea') || interest.includes('rechazó') || interest.includes('equivocado') || interest.includes('no contest');
+        
+        // Un cliente es considerado "ya contactado/no interesado" si está catalogado como SÍ contactado o de plano indicó no estar interesado.
+        // Pero para no desaparecer a los que sí están en negociación o pagaron, los mantenemos en el principal si son TIBIOS o CALIENTES, salvo que explícitamente no deseen.
+        let isArchived = (c.is_contacted === 'SÍ' && c.status === 'FRÍO') || noInteresado;
+        
+        const matchMode = filterMode === 'archived' ? isArchived : !isArchived;
+
+        return matchText && matchContacted && matchAnswered && matchWp && matchMode;
     });
 
     return (
         <div className="space-y-4 relative w-full h-full flex flex-col">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-brand-900 tracking-tight">Embudo de Llamadas</h1>
-                    <p className="text-gray-500 mt-1 text-sm">Gestiona y rastrea tu pipeline a velocidad corporativa.</p>
+                    <h1 className="text-2xl font-bold text-brand-900 tracking-tight">
+                        {filterMode === 'archived' ? 'Contactados / No Interesados' : 'Embudo de Llamadas'}
+                    </h1>
+                    <p className="text-gray-500 mt-1 text-sm">
+                        {filterMode === 'archived' ? 'Historial de clientes que ya fueron contactados o descartados.' : 'Gestiona y rastrea tu pipeline a velocidad corporativa.'}
+                    </p>
                 </div>
                 <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     {/* Toggler KANBAN / TABLE */}

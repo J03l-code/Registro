@@ -11,7 +11,8 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/clientes" element={<Clientes />} />
+        <Route path="/clientes" element={<Clientes filterMode="main" />} />
+        <Route path="/contactados" element={<Clientes filterMode="archived" />} />
         <Route path="/agenda" element={<Agenda />} />
       </Route>
     </Routes>

@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom"
-import { Users, LayoutDashboard, CalendarDays, LogOut, Briefcase } from "lucide-react"
+import { Users, LayoutDashboard, CalendarDays, LogOut, Briefcase, Archive } from "lucide-react"
 import { cn } from "../../lib/utils"
 
 export function Layout() {
@@ -25,6 +25,7 @@ export function Layout() {
     const navLinks = [
         { name: 'Dashboard', path: '/', icon: LayoutDashboard },
         { name: 'Clientes', path: '/clientes', icon: Users },
+        { name: 'Contactados', path: '/contactados', icon: Archive },
         { name: 'Agenda', path: '/agenda', icon: CalendarDays },
     ];
 
