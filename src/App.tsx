@@ -4,6 +4,7 @@ import { Login } from './pages/Login'
 import { Dashboard } from './pages/Dashboard'
 import { Clientes } from './pages/Clientes'
 import { Agenda } from './pages/Agenda'
+import { NotaVenta } from './pages/NotaVenta'
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
         <Route path="/clientes" element={<Clientes filterMode="main" />} />
         <Route path="/contactados" element={<Clientes filterMode="archived" />} />
         <Route path="/agenda" element={<Agenda />} />
+        <Route path="/nota-venta" element={<NotaVenta />} />
       </Route>
     </Routes>
   )
