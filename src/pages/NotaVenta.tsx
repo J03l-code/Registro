@@ -210,9 +210,9 @@ export function NotaVenta() {
     if (logoBase64) {
       try {
         if (selectedLogo === "largo") {
-          doc.addImage(logoBase64, "PNG", 15, 23, 50, 12);
+          doc.addImage(logoBase64, "PNG", 15, 20, 85, 20);
         } else {
-          doc.addImage(logoBase64, "PNG", 15, 21, 16, 16);
+          doc.addImage(logoBase64, "PNG", 15, 20, 24, 24);
         }
       } catch (err) {
         console.error("Error agregando logo al PDF:", err);
@@ -220,7 +220,7 @@ export function NotaVenta() {
     } else {
       // Draw elegant placeholder
       doc.setFillColor(243, 244, 246);
-      doc.rect(15, 21, 35, 12, "F");
+      doc.rect(15, 20, 35, 12, "F");
       doc.setFont("Helvetica", "bold");
       doc.setFontSize(10);
       doc.setTextColor(156, 163, 175);
@@ -231,14 +231,14 @@ export function NotaVenta() {
     doc.setTextColor(textDark[0], textDark[1], textDark[2]);
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(11);
-    doc.text(companyName, 15, 42);
+    doc.text(companyName, 15, 48);
 
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(8.5);
     doc.setTextColor(textLight[0], textLight[1], textLight[2]);
-    doc.text(`RUC: ${companyRuc}`, 15, 46);
-    doc.text(`Dir: ${companyAddress}`, 15, 50);
-    doc.text(`Telf: ${companyPhone} | Email: ${companyEmail}`, 15, 54);
+    doc.text(`RUC: ${companyRuc}`, 15, 52);
+    doc.text(`Dir: ${companyAddress}`, 15, 56);
+    doc.text(`Telf: ${companyPhone} | Email: ${companyEmail}`, 15, 60);
 
     // --- 2. DOCUMENT ID BOX ---
     doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
@@ -268,47 +268,47 @@ export function NotaVenta() {
     // Divider Line
     doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2]);
     doc.setLineWidth(0.3);
-    doc.line(15, 59, 195, 59);
+    doc.line(15, 66, 195, 66);
 
     // --- 3. CLIENT DETAILS SECTION ---
     doc.setFillColor(239, 246, 255); // Light brand blue banner
-    doc.rect(15, 63, 180, 6, "F");
+    doc.rect(15, 70, 180, 6, "F");
     
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.text("DATOS DEL CLIENTE", 18, 67.2);
+    doc.text("DATOS DEL CLIENTE", 18, 74.2);
 
     doc.setTextColor(textDark[0], textDark[1], textDark[2]);
     // Client Grid Left Column
     doc.setFont("Helvetica", "bold");
-    doc.text("Razón Social:", 15, 74);
+    doc.text("Razón Social:", 15, 81);
     doc.setFont("Helvetica", "normal");
-    doc.text(clientName || "Consumidor Final", 38, 74);
+    doc.text(clientName || "Consumidor Final", 38, 81);
 
     doc.setFont("Helvetica", "bold");
-    doc.text("RUC / C.I.:", 15, 79);
+    doc.text("RUC / C.I.:", 15, 86);
     doc.setFont("Helvetica", "normal");
-    doc.text(clientRucCi || "9999999999999", 38, 79);
+    doc.text(clientRucCi || "9999999999999", 38, 86);
 
     doc.setFont("Helvetica", "bold");
-    doc.text("Dirección:", 15, 84);
+    doc.text("Dirección:", 15, 91);
     doc.setFont("Helvetica", "normal");
-    doc.text(clientAddress || "N/A", 38, 84);
+    doc.text(clientAddress || "N/A", 38, 91);
 
     // Client Grid Right Column
     doc.setFont("Helvetica", "bold");
-    doc.text("Teléfono:", 120, 74);
+    doc.text("Teléfono:", 120, 81);
     doc.setFont("Helvetica", "normal");
-    doc.text(clientPhone || "N/A", 138, 74);
+    doc.text(clientPhone || "N/A", 138, 81);
 
     doc.setFont("Helvetica", "bold");
-    doc.text("Correo:", 120, 79);
+    doc.text("Correo:", 120, 86);
     doc.setFont("Helvetica", "normal");
-    doc.text(clientEmail || "N/A", 138, 79);
+    doc.text(clientEmail || "N/A", 138, 86);
 
     // --- 4. DETAILS OF PRODUCTS/SERVICES TABLE ---
-    let tableY = 91;
+    let tableY = 98;
     doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     doc.rect(15, tableY, 180, 8, "F");
 
@@ -1006,9 +1006,9 @@ export function NotaVenta() {
               <div className="flex justify-between items-start mb-6">
                 <div>
                   {selectedLogo === "largo" ? (
-                    <img src="/Logo_largo.png" alt="Company Logo" className="h-7 w-auto object-contain mb-2.5 max-w-[150px]" />
+                    <img src="/Logo_largo.png" alt="Company Logo" className="h-12 w-auto object-contain mb-3 max-w-[220px]" />
                   ) : (
-                    <img src="/logo-jd-clean.png" alt="Company Logo" className="h-10 w-auto object-contain mb-2 max-w-[80px]" />
+                    <img src="/logo-jd-clean.png" alt="Company Logo" className="h-14 w-auto object-contain mb-2 max-w-[120px]" />
                   )}
                   <h4 className="font-bold text-gray-900 text-xs">{companyName}</h4>
                   <p className="text-gray-500 leading-tight text-[9px] mt-0.5">RUC: {companyRuc}</p>
