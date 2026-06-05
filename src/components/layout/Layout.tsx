@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom"
 import { Users, LayoutDashboard, CalendarDays, LogOut, Briefcase, Archive, Receipt, Star } from "lucide-react"
 import { cn } from "../../lib/utils"
+import { GlobalSearch } from "../ui/GlobalSearch"
 
 export function Layout() {
     const location = useLocation();
@@ -43,9 +44,13 @@ export function Layout() {
         <div className="min-h-screen bg-gray-50 flex">
             {/* Sidebar */}
             <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col">
-                <div className="h-16 flex items-center px-6 border-b border-gray-200">
-                    <Briefcase className="w-6 h-6 text-brand-600 mr-2" />
-                    <span className="font-bold text-gray-900 text-lg tracking-tight">CRM SaaS</span>
+                <div className="h-16 flex items-center px-4 border-b border-gray-200 gap-2">
+                    <Briefcase className="w-5 h-5 text-brand-600 shrink-0" />
+                    <span className="font-bold text-gray-900 text-base tracking-tight">CRM SaaS</span>
+                </div>
+                {/* Búsqueda global en sidebar */}
+                <div className="px-4 pt-4 pb-2">
+                    <GlobalSearch />
                 </div>
                 <nav className="flex-1 px-4 py-6 space-y-1">
                     {navLinks.map((link) => {
@@ -85,12 +90,15 @@ export function Layout() {
             {/* Main content */}
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
                 {/* Topbar mobile */}
-                <header className="h-16 md:hidden bg-white border-b border-gray-200 flex items-center px-4 justify-between">
-                    <div className="flex items-center">
-                        <Briefcase className="w-6 h-6 text-brand-600 mr-2" />
-                        <span className="font-bold text-gray-900 leading-none">CRM</span>
+                <header className="h-16 md:hidden bg-white border-b border-gray-200 flex items-center px-4 gap-3">
+                    <div className="flex items-center shrink-0">
+                        <Briefcase className="w-5 h-5 text-brand-600 mr-1.5" />
+                        <span className="font-bold text-gray-900 text-sm">CRM</span>
                     </div>
-                    <button onClick={handleLogout} className="text-gray-500 hover:text-red-500">
+                    <div className="flex-1">
+                        <GlobalSearch />
+                    </div>
+                    <button onClick={handleLogout} className="text-gray-500 hover:text-red-500 shrink-0">
                         <LogOut className="w-5 h-5" />
                     </button>
                 </header>
