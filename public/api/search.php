@@ -29,7 +29,7 @@ try {
             'title'    => $r['name'],
             'subtitle' => trim(($r['rubro'] ?? '') . ' • ' . ($r['status'] ?? ''), ' •'),
             'meta'     => $r['phone'] ?? $r['email'] ?? '',
-            'url'      => '/clientes'
+            'url'      => '/clientes?leadId=' . $r['id']
         ];
     }
 

@@ -318,7 +318,7 @@ export function Agenda() {
                                                             if (item.active_client_id) {
                                                                 navigate(`/clientes-activos/${item.active_client_id}`)
                                                             } else if (item.lead_id) {
-                                                                navigate(`/clientes`)
+                                                                navigate(`/clientes?leadId=${item.lead_id}`)
                                                             }
                                                         }}
                                                         className="text-xs text-[#4a55c2] hover:text-[#3b43a1] font-bold hover:underline text-left block"

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { Search, Plus, X, MessageCircle, Filter, Eye, DollarSign, AtSign, ArrowRight, BellRing, CalendarClock, Download, UploadCloud, FileText, LayoutList, KanbanSquare, Trash2, Globe, Share2, Mail } from "lucide-react"
 import { QuoteGenerator } from "../components/QuoteGenerator"
 import { Button } from "../components/ui/Button"
@@ -23,6 +23,9 @@ const KANBAN_COLS = [
 
 export function Clientes({ filterMode = 'main' }: { filterMode?: 'main' | 'archived' }) {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const leadIdParam = searchParams.get('leadId');
+
     const [clients, setClients] = useState<any[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -68,6 +71,19 @@ export function Clientes({ filterMode = 'main' }: { filterMode?: 'main' | 'archi
                 setLoading(false);
             });
     }, []);
+
+    // Effect para abrir expediente si viene de la URL
+    useEffect(() => {
+        if (leadIdParam && clients.length > 0) {
+            const found = clients.find(c => String(c.id) === leadIdParam);
+            if (found) {
+                openHistoryPanel(found);
+                // Limpiar parámetro de la URL
+                searchParams.delete('leadId');
+                setSearchParams(searchParams, { replace: true });
+            }
+        }
+    }, [leadIdParam, clients]);
 
     const handlePromoteToActive = async (lead: any) => {
         if (!confirm(`¿Deseas promover a "${lead.name}" a Cliente Activo?\n\nSe creará un expediente dedicado con control de pagos, bitácora de cambios, credenciales y checklist de tareas.`)) return;
@@ -517,119 +533,258 @@ export function Clientes({ filterMode = 'main' }: { filterMode?: 'main' | 'archi
             {/* PANEL LATERAL: EXPEDIENTE Y TRAZABILIDAD TIMELINE Y CLOUD DRIVE */}
             {panelOpen && currentLead && (
                 <div className="fixed inset-0 z-40 flex justify-end">
-                    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setPanelOpen(false)}></div>
+                    <div className="fixed inset-0 bg-black/45 backdrop-blur-sm" onClick={() => setPanelOpen(false)}></div>
                     <div className="w-full max-w-sm md:max-w-md bg-white h-full shadow-2xl relative flex flex-col animate-in slide-in-from-right duration-300">
+                        {/* Header Panel */}
                         <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-[#4a55c2] text-white">
-                            <h2 className="text-lg font-bold">Expediente del Cliente</h2>
-                            <button onClick={() => setPanelOpen(false)} className="text-white hover:text-gray-200"><X className="w-6 h-6" /></button>
+                            <div>
+                                <h2 className="text-lg font-bold">Ficha de Prospecto</h2>
+                                <p className="text-xs text-indigo-100 font-medium">Información y seguimiento comercial</p>
+                            </div>
+                            <button onClick={() => setPanelOpen(false)} className="text-white hover:text-gray-200 bg-white/10 hover:bg-white/20 p-1.5 rounded-lg transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-gray-50">
-
-                            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-                                <div className="flex justify-between items-start mb-1">
-                                    <h3 className="text-xl font-bold text-gray-900">{currentLead.name}</h3>
-                                    <span className="text-xs font-bold uppercase tracking-wider px-2 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200">
-                                        {currentLead.status || 'FRÍO'}
-                                    </span>
-                                </div>
-                                <p className="text-sm text-brand-600 font-semibold mb-4">{currentLead.rubro || 'Sin rubro asignado'}</p>
-
-                                <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">
-                                    <div className="flex items-center">
-                                        <DollarSign className="w-4 h-4 text-gray-400 mr-2" />
-                                        <input type="number" placeholder="Valor de Cotización ($)" className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full" value={currentLead.estimated_value || ''} onChange={(e) => setCurrentLead({ ...currentLead, estimated_value: e.target.value })} onBlur={(e) => handleUpdateField(currentLead.id, 'estimated_value', parseFloat(e.target.value) || 0)} />
-                                    </div>
-                                    <div className="flex items-center">
-                                        <Mail className="w-4 h-4 text-gray-400 mr-2" />
-                                        <input type="email" placeholder="correo@ejemplo.com" className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full" value={currentLead.email || ''} onChange={(e) => setCurrentLead({ ...currentLead, email: e.target.value })} onBlur={(e) => handleUpdateField(currentLead.id, 'email', e.target.value)} />
-                                    </div>
-                                    <div className="flex items-center">
-                                        <AtSign className="w-4 h-4 text-pink-500 mr-2" />
-                                        <input placeholder="@usuario_instagram" className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full" value={currentLead.social_instagram || ''} onChange={(e) => setCurrentLead({ ...currentLead, social_instagram: e.target.value })} onBlur={(e) => handleUpdateField(currentLead.id, 'social_instagram', e.target.value)} />
-                                    </div>
-                                    <div className="flex items-center">
-                                        <Share2 className="w-4 h-4 text-blue-600 mr-2" />
-                                        <input placeholder="Facebook URL o nombre" className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full" value={currentLead.social_facebook || ''} onChange={(e) => setCurrentLead({ ...currentLead, social_facebook: e.target.value })} onBlur={(e) => handleUpdateField(currentLead.id, 'social_facebook', e.target.value)} />
-                                    </div>
-                                    <div className="flex items-center">
-                                        <Globe className="w-4 h-4 text-teal-500 mr-2" />
-                                        <input placeholder="www.sitio-web.com" className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full" value={currentLead.social_website || ''} onChange={(e) => setCurrentLead({ ...currentLead, social_website: e.target.value })} onBlur={(e) => handleUpdateField(currentLead.id, 'social_website', e.target.value)} />
-                                    </div>
-                                    <div className="flex items-center">
-                                        <span className="text-xs font-semibold text-gray-500 mr-2 w-14">Pipeline</span>
-                                        <select className="text-sm bg-gray-50 border-gray-200 rounded px-2 py-1 w-full font-semibold" value={currentLead.status || 'FRÍO'} onChange={(e) => { handleUpdateField(currentLead.id, 'status', e.target.value); setCurrentLead({ ...currentLead, status: e.target.value }); }}>
-                                            <option value="FRÍO">❄️ Frío</option>
-                                            <option value="TIBIO">🔥 Tibio</option>
-                                            <option value="CALIENTE">💰 Caliente / Pagado</option>
+                        {/* Content Panel */}
+                        <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-slate-50/50">
+                            
+                            {/* Card 1: Identidad y Rubro */}
+                            <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm space-y-4">
+                                <div>
+                                    <div className="flex justify-between items-start gap-2">
+                                        <h3 className="text-lg font-black text-gray-900 leading-tight">{currentLead.name}</h3>
+                                        <select 
+                                            className="text-xs bg-indigo-50 border border-indigo-100 text-[#4a55c2] rounded-lg px-2.5 py-1 font-bold outline-none focus:ring-1 focus:ring-[#4a55c2]" 
+                                            value={currentLead.status || 'FRÍO'} 
+                                            onChange={(e) => { handleUpdateField(currentLead.id, 'status', e.target.value); setCurrentLead({ ...currentLead, status: e.target.value }); }}
+                                        >
+                                            <option value="FRÍO">❄️ FRÍO</option>
+                                            <option value="TIBIO">🔥 TIBIO</option>
+                                            <option value="CALIENTE">💰 CALIENTE</option>
                                         </select>
                                     </div>
+                                    <p className="text-xs text-[#4a55c2] font-black mt-1 uppercase tracking-wider">{currentLead.rubro || 'Sin rubro asignado'}</p>
                                 </div>
 
-                                {currentLead.pending_tasks == 0 && currentLead.status !== 'CALIENTE' ? (
-                                    <div className="mt-4 p-3 bg-red-50 text-red-700 text-xs font-bold rounded-lg flex items-start border border-red-100">
-                                        <BellRing className="w-4 h-4 mr-2 shrink-0" /> ALERTA: Sin acciones calendarizadas.
+                                <div className="space-y-3 pt-3 border-t border-gray-100">
+                                    {/* Valor Cotización */}
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Valor Estimado del Trato</label>
+                                        <div className="relative rounded-xl shadow-sm">
+                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                <DollarSign className="h-4 w-4 text-gray-400" />
+                                            </div>
+                                            <input 
+                                                type="number" 
+                                                placeholder="0.00" 
+                                                className="text-sm bg-gray-50/50 border border-gray-200 rounded-xl pl-8 pr-3 py-2 w-full font-bold text-gray-800 focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none" 
+                                                value={currentLead.estimated_value || ''} 
+                                                onChange={(e) => setCurrentLead({ ...currentLead, estimated_value: e.target.value })} 
+                                                onBlur={(e) => handleUpdateField(currentLead.id, 'estimated_value', parseFloat(e.target.value) || 0)} 
+                                            />
+                                        </div>
                                     </div>
-                                ) : (
-                                    <div className="mt-4 p-3 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-100">
-                                        ✔ Cliente en seguimiento activo / cerrado ({currentLead.pending_tasks} tareas).
-                                    </div>
-                                )}
-
-                                {currentLead.status !== 'CALIENTE' && (
-                                    <Button onClick={() => { setNewTask({ type: 'LLAMADA', summary: '', scheduled_for: '' }); setIsTaskModalOpen(true); }} className="w-full mt-4 bg-orange-100 text-orange-700 hover:bg-orange-200 shadow-none border border-orange-200 font-bold">
-                                        <CalendarClock className="w-4 h-4 mr-2" /> Agendar Siguiente Paso
-                                    </Button>
-                                )}
-
-                                <Button 
-                                    onClick={() => handlePromoteToActive(currentLead)} 
-                                    className="w-full mt-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-bold shadow-md border-none flex items-center justify-center gap-1.5"
-                                >
-                                    ⭐ Promover a Cliente Activo
-                                </Button>
-
-                                <Button onClick={() => setIsQuoteOpen(true)} className="w-full mt-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 shadow-none border border-indigo-200 font-bold">
-                                    <FileText className="w-4 h-4 mr-2" /> Generar Cotización PDF Formal
-                                </Button>
-
-                                <button onClick={() => handleDeleteClient(currentLead.id, currentLead.name)} className="w-full mt-3 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors font-semibold flex items-center justify-center">
-                                    <Trash2 className="w-3.5 h-3.5 mr-2" /> Eliminar este cliente permanentemente
-                                </button>
+                                </div>
                             </div>
 
-                            <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">
-                                <h3 className="text-sm font-bold text-blue-900 mb-3 flex items-center">
-                                    <UploadCloud className="w-4 h-4 mr-2" /> Archivos Adjuntos
-                                </h3>
-                                <div className="space-y-2 mb-3">
-                                    {leadFiles.length === 0 ? <p className="text-xs text-blue-400 font-medium">Vacío (Sin contratos/recibos)</p> :
-                                        leadFiles.map((file, i) => (
-                                            <a key={i} href={file.file_url} target="_blank" rel="noreferrer" className="flex items-center text-xs bg-white border border-blue-100 p-2 rounded hover:bg-blue-100 transition-colors">
-                                                <FileText className="w-3 h-3 mr-2 text-blue-500 flex-shrink-0" />
-                                                <span className="truncate flex-1 text-blue-800 font-medium">{file.filename}</span>
-                                            </a>
-                                        ))}
+                            {/* Card 2: Contacto y Redes Sociales */}
+                            <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm space-y-4">
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Contacto & Redes</h4>
+                                
+                                <div className="space-y-3">
+                                    {/* WhatsApp / Teléfono */}
+                                    {currentLead.phone && (
+                                        <div className="flex items-center justify-between bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
+                                            <div className="min-w-0">
+                                                <p className="text-[9px] font-black text-gray-400 uppercase">WhatsApp</p>
+                                                <p className="text-xs font-bold text-gray-700 truncate">{currentLead.phone}</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => handleWhatsApp(currentLead.name, currentLead.phone)}
+                                                className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                                            >
+                                                <MessageCircle className="w-3.5 h-3.5" /> Enviar
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Correo Electrónico */}
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                            <Mail className="w-3 h-3 text-slate-400" /> Correo Electrónico
+                                        </label>
+                                        <input 
+                                            type="email" 
+                                            placeholder="correo@ejemplo.com" 
+                                            className="text-xs bg-gray-50/50 border border-gray-200 rounded-xl px-3 py-2 w-full font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none" 
+                                            value={currentLead.email || ''} 
+                                            onChange={(e) => setCurrentLead({ ...currentLead, email: e.target.value })} 
+                                            onBlur={(e) => handleUpdateField(currentLead.id, 'email', e.target.value)} 
+                                        />
+                                    </div>
+
+                                    {/* Instagram */}
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                            <AtSign className="w-3 h-3 text-pink-500" /> Perfil de Instagram
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input 
+                                                placeholder="@usuario_instagram" 
+                                                className="text-xs bg-gray-50/50 border border-gray-200 rounded-xl px-3 py-2 w-full font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none" 
+                                                value={currentLead.social_instagram || ''} 
+                                                onChange={(e) => setCurrentLead({ ...currentLead, social_instagram: e.target.value })} 
+                                                onBlur={(e) => handleUpdateField(currentLead.id, 'social_instagram', e.target.value)} 
+                                            />
+                                            {currentLead.social_instagram && (
+                                                <a 
+                                                    href={`https://instagram.com/${currentLead.social_instagram.replace('@', '').trim()}`} 
+                                                    target="_blank" 
+                                                    rel="noreferrer"
+                                                    className="bg-pink-50 hover:bg-pink-100 border border-pink-200 text-pink-600 p-2 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                                                    title="Abrir Instagram"
+                                                >
+                                                    <Globe className="w-4 h-4" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Facebook */}
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                            <Share2 className="w-3 h-3 text-blue-600" /> Perfil de Facebook
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input 
+                                                placeholder="Facebook URL o nombre" 
+                                                className="text-xs bg-gray-50/50 border border-gray-200 rounded-xl px-3 py-2 w-full font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none" 
+                                                value={currentLead.social_facebook || ''} 
+                                                onChange={(e) => setCurrentLead({ ...currentLead, social_facebook: e.target.value })} 
+                                                onBlur={(e) => handleUpdateField(currentLead.id, 'social_facebook', e.target.value)} 
+                                            />
+                                            {currentLead.social_facebook && (
+                                                <a 
+                                                    href={currentLead.social_facebook.startsWith('http') ? currentLead.social_facebook : `https://facebook.com/${currentLead.social_facebook.trim()}`} 
+                                                    target="_blank" 
+                                                    rel="noreferrer"
+                                                    className="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 p-2 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                                                    title="Abrir Facebook"
+                                                >
+                                                    <Globe className="w-4 h-4" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Sitio Web */}
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                            <Globe className="w-3 h-3 text-teal-600" /> Sitio Web Oficial
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input 
+                                                placeholder="www.sitio-web.com" 
+                                                className="text-xs bg-gray-50/50 border border-gray-200 rounded-xl px-3 py-2 w-full font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none" 
+                                                value={currentLead.social_website || ''} 
+                                                onChange={(e) => setCurrentLead({ ...currentLead, social_website: e.target.value })} 
+                                                onBlur={(e) => handleUpdateField(currentLead.id, 'social_website', e.target.value)} 
+                                            />
+                                            {currentLead.social_website && (
+                                                <a 
+                                                    href={currentLead.social_website.startsWith('http') ? currentLead.social_website : `https://${currentLead.social_website.trim()}`} 
+                                                    target="_blank" 
+                                                    rel="noreferrer"
+                                                    className="bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-600 p-2 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                                                    title="Abrir Web"
+                                                >
+                                                    <Globe className="w-4 h-4" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <label className="text-xs cursor-pointer bg-white text-blue-600 font-semibold border-2 border-dashed border-blue-300 w-full rounded p-3 text-center flex items-center justify-center hover:bg-blue-50 transition-colors">
-                                    {uploading ? 'Subiendo...' : 'Agregar Archivo PDF / JPG'}
+                            </div>
+
+                            {/* Card 3: Acciones de Gestión */}
+                            <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm space-y-3">
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Herramientas Comerciales</h4>
+
+                                {currentLead.pending_tasks == 0 && currentLead.status !== 'CALIENTE' ? (
+                                    <div className="p-3 bg-red-50 text-red-700 text-xs font-bold rounded-xl flex items-start border border-red-100">
+                                        <BellRing className="w-4 h-4 mr-2 shrink-0 text-red-500" /> Alerta: Sin actividades de agenda programadas.
+                                    </div>
+                                ) : (
+                                    <div className="p-3 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-100">
+                                        ✔ Lead con seguimiento activo ({currentLead.pending_tasks} tareas).
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-1 gap-2 pt-2">
+                                    {currentLead.status !== 'CALIENTE' && (
+                                        <Button onClick={() => { setNewTask({ type: 'LLAMADA', summary: '', scheduled_for: '' }); setIsTaskModalOpen(true); }} className="w-full bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/50 shadow-none font-bold py-2 rounded-xl text-xs">
+                                            <CalendarClock className="w-4 h-4 mr-2" /> Agendar Nueva Actividad
+                                        </Button>
+                                    )}
+
+                                    <Button onClick={() => setIsQuoteOpen(true)} className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200/50 shadow-none font-bold py-2 rounded-xl text-xs">
+                                        <FileText className="w-4 h-4 mr-2" /> Generar Cotización PDF
+                                    </Button>
+
+                                    <Button 
+                                        onClick={() => handlePromoteToActive(currentLead)} 
+                                        className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-bold py-2.5 rounded-xl shadow-md border-none text-xs flex items-center justify-center gap-1.5 mt-1"
+                                    >
+                                        ⭐ Promover a Cliente Activo
+                                    </Button>
+
+                                    <button onClick={() => handleDeleteClient(currentLead.id, currentLead.name)} className="w-full mt-2 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 py-2 rounded-xl transition-colors font-bold flex items-center justify-center">
+                                        <Trash2 className="w-3.5 h-3.5 mr-2" /> Eliminar Prospecto
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Card 4: Drive Cloud */}
+                            <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm space-y-3">
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                    <UploadCloud className="w-4 h-4 text-blue-500" /> Expediente Cloud Drive
+                                </h4>
+                                
+                                <div className="space-y-2">
+                                    {leadFiles.length === 0 ? (
+                                        <p className="text-xs text-gray-400 font-medium italic p-2 bg-slate-50 rounded-xl text-center">Sin archivos adjuntos (contratos, recibos, etc.)</p>
+                                    ) : (
+                                        leadFiles.map((file, i) => (
+                                            <a key={i} href={file.file_url} target="_blank" rel="noreferrer" className="flex items-center text-xs bg-slate-50 border border-slate-100 p-2.5 rounded-xl hover:bg-indigo-50 hover:border-indigo-150 transition-all">
+                                                <FileText className="w-4 h-4 mr-2 text-indigo-500 flex-shrink-0" />
+                                                <span className="truncate flex-1 text-slate-700 font-semibold">{file.filename}</span>
+                                            </a>
+                                        ))
+                                    )}
+                                </div>
+                                
+                                <label className="text-xs cursor-pointer bg-slate-50 text-indigo-600 font-bold border-2 border-dashed border-indigo-200 w-full rounded-xl p-3 text-center flex items-center justify-center hover:bg-indigo-50/50 hover:border-indigo-300 transition-colors">
+                                    {uploading ? 'Subiendo archivo...' : '+ Agregar Archivo PDF / Imagen'}
                                     <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
                                 </label>
                             </div>
 
-                            <div>
-                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-4 flex items-center">
-                                    <ArrowRight className="w-4 h-4 mr-2 text-[#4a55c2]" /> Timeline Automático
-                                </h3>
-                                <div className="pl-4 border-l-2 border-[#4a55c2] space-y-6 relative">
+                            {/* Card 5: Timeline */}
+                            <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm space-y-4">
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                    <ArrowRight className="w-4 h-4 text-[#4a55c2]" /> Bitácora & Timeline
+                                </h4>
+                                
+                                <div className="pl-4 border-l-2 border-indigo-100 space-y-6 relative ml-1">
                                     {selectedHistory.length === 0 ? (
-                                        <p className="text-sm text-gray-400">No hay eventos grabados aún.</p>
+                                        <p className="text-xs text-gray-400 italic">No hay eventos grabados aún.</p>
                                     ) : (
                                         selectedHistory.map((h, idx) => (
                                             <div key={idx} className="relative">
-                                                <div className="absolute -left-[21px] top-1 w-3 h-3 bg-white border-2 border-[#4a55c2] rounded-full"></div>
-                                                <span className="block text-xs font-bold text-gray-400 mb-0.5">{new Date(h.created_at).toLocaleString()}</span>
-                                                <p className="text-sm text-gray-700 leading-snug">{h.event_desc}</p>
+                                                <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 bg-white border-2 border-indigo-500 rounded-full"></div>
+                                                <span className="block text-[10px] font-black text-gray-400 mb-0.5">{new Date(h.created_at).toLocaleString()}</span>
+                                                <p className="text-xs text-gray-700 font-medium leading-relaxed">{h.event_desc}</p>
                                             </div>
                                         ))
                                     )}
