@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { 
     ArrowLeft, DollarSign, Calendar, Landmark, Key, 
     Globe, Phone, Mail, Eye, EyeOff, Save, Trash2, 
-    CheckCircle2, RefreshCw, CheckSquare, PlusCircle, Trash, ExternalLink, X
+    CheckCircle2, RefreshCw, CheckSquare, PlusCircle, Trash, ExternalLink, X, FileText
 } from "lucide-react"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
@@ -21,7 +21,7 @@ export function PerfilClienteActivo() {
     const navigate = useNavigate()
 
     // Tabs
-    const [activeTab, setActiveTab] = useState<'resumen' | 'pagos' | 'cambios' | 'credenciales' | 'tareas'>('resumen')
+    const [activeTab, setActiveTab] = useState<'resumen' | 'pagos' | 'cambios' | 'credenciales' | 'tareas' | 'renovaciones' | 'archivos'>('resumen')
 
     // Cliente
     const [client, setClient] = useState<any>(null)
@@ -35,6 +35,8 @@ export function PerfilClienteActivo() {
     const [changes, setChanges] = useState<any[]>([])
     const [credentials, setCredentials] = useState<any[]>([])
     const [tasks, setTasks] = useState<any[]>([])
+    const [subscriptions, setSubscriptions] = useState<any[]>([])
+    const [documents, setDocuments] = useState<any[]>([])
 
     // Mostrar contraseñas toggles
     const [showPass, setShowPass] = useState<Record<number, boolean>>({})
@@ -51,6 +53,15 @@ export function PerfilClienteActivo() {
 
     const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'MEDIA', status: 'PENDIENTE', due_date: '' })
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
+
+    const [newSub, setNewSub] = useState({ service_name: '', price: '', billing_period: 'ANUAL', next_due_date: '', status: 'ACTIVO' })
+    const [isSubModalOpen, setIsSubModalOpen] = useState(false)
+    const [uploadingDoc, setUploadingDoc] = useState(false)
+
+    // WhatsApp Addons
+    const [isWpModalOpen, setIsWpModalOpen] = useState(false)
+    const [selectedWpTemplate, setSelectedWpTemplate] = useState('pago')
+    const [wpCustomParams, setWpCustomParams] = useState({ monto: '', concepto: '', cambio: '', plataforma: '', usuario: '', url: '', fecha: '' })
 
     useEffect(() => {
         loadAllData()
@@ -92,6 +103,16 @@ export function PerfilClienteActivo() {
             const resT = await fetch(`/api/project_tasks.php?client_id=${id}`)
             const dT = await resT.json()
             if (dT.success) setTasks(dT.data || [])
+
+            // Cargar renovaciones
+            const resS = await fetch(`/api/active_client_subscriptions.php?client_id=${id}`)
+            const dS = await resS.json()
+            if (dS.success) setSubscriptions(dS.data || [])
+
+            // Cargar archivos
+            const resD = await fetch(`/api/active_client_uploads.php?client_id=${id}`)
+            const dD = await resD.json()
+            if (dD.success) setDocuments(dD.data || [])
 
         } catch (e) {
             console.error("Error al cargar perfil de cliente activo", e)
@@ -314,6 +335,107 @@ export function PerfilClienteActivo() {
         }
     }
 
+    // --- ACCIONES DE RENOVACIONES (Opción 1) ---
+    const handleAddSubscription = async (e: React.FormEvent) => {
+        e.preventDefault()
+        try {
+            const res = await fetch('/api/active_client_subscriptions.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    ...newSub, 
+                    active_client_id: id,
+                    price: parseFloat(newSub.price) || 0
+                })
+            })
+            const data = await res.json()
+            if (data.success) {
+                setIsSubModalOpen(false)
+                setNewSub({ service_name: '', price: '', billing_period: 'ANUAL', next_due_date: '', status: 'ACTIVO' })
+                loadAllData()
+            }
+        } catch (e) {
+            console.error(e)
+        }
+    }
+
+    const handleRenewSubscription = async (subId: number) => {
+        if (!confirm("¿Deseas registrar la renovación de este servicio?\n\nSe actualizará al siguiente período de cobro y se agregará un pago PAGADO en el historial de facturación.")) return
+        try {
+            const res = await fetch('/api/active_client_subscriptions.php', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: subId, renewed: true })
+            })
+            const data = await res.json()
+            if (data.success) loadAllData()
+        } catch (e) {
+            console.error(e)
+        }
+    }
+
+    const handleDeleteSubscription = async (subId: number) => {
+        if (!confirm("¿Deseas eliminar este registro de renovación recurrente?")) return
+        try {
+            await fetch('/api/active_client_subscriptions.php', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: subId })
+            })
+            loadAllData()
+        } catch (e) {
+            console.error(e)
+        }
+    }
+
+    // --- ACCIONES DE GESTOR DE ARCHIVOS (Opción 4) ---
+    const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file || !id) return
+
+        setUploadingDoc(true)
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('active_client_id', id)
+
+        try {
+            const res = await fetch('/api/active_client_uploads.php', {
+                method: 'POST',
+                body: formData
+            })
+            const data = await res.json()
+            if (data.success) {
+                loadAllData()
+            } else {
+                alert("Error al subir archivo: " + data.error)
+            }
+        } catch (e) {
+            console.error(e)
+            alert("Error al intentar subir archivo.")
+        } finally {
+            setUploadingDoc(false)
+        }
+    }
+
+    const handleDeleteFile = async (fileId: number) => {
+        if (!confirm("¿Deseas eliminar este archivo permanentemente?")) return
+        try {
+            const res = await fetch('/api/active_client_uploads.php', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: fileId })
+            })
+            const data = await res.json()
+            if (data.success) {
+                loadAllData()
+            } else {
+                alert("Error al borrar: " + data.error)
+            }
+        } catch (e) {
+            console.error(e)
+        }
+    }
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -375,9 +497,18 @@ export function PerfilClienteActivo() {
                         
                         <div className="flex flex-wrap justify-center md:justify-start gap-x-4 gap-y-2 pt-3 text-xs text-gray-500 font-medium">
                             {client.phone && (
-                                <span className="flex items-center gap-1.5">
-                                    <Phone className="w-3.5 h-3.5 text-gray-400" /> {client.phone}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                    <span className="flex items-center gap-1.5">
+                                        <Phone className="w-3.5 h-3.5 text-gray-400" /> {client.phone}
+                                    </span>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsWpModalOpen(true)}
+                                        className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-black flex items-center gap-1 transition-colors outline-none"
+                                    >
+                                        💬 WhatsApp Rápido
+                                    </button>
+                                </div>
                             )}
                             {client.email && (
                                 <span className="flex items-center gap-1.5">
@@ -414,9 +545,11 @@ export function PerfilClienteActivo() {
                 {[
                     { id: 'resumen', label: '📋 Resumen e Info', count: null },
                     { id: 'pagos', label: '💰 Facturación y Pagos', count: payments.length },
+                    { id: 'renovaciones', label: '📅 Renovaciones', count: subscriptions.filter(s => s.status === 'ACTIVO').length },
                     { id: 'cambios', label: '🌐 Control de Cambios', count: changes.length },
                     { id: 'credenciales', label: '🔑 Bóveda de Accesos', count: credentials.length },
-                    { id: 'tareas', label: '✅ Plan de Trabajo', count: tasks.filter(t => t.status !== 'COMPLETADO').length }
+                    { id: 'tareas', label: '✅ Plan de Trabajo', count: tasks.filter(t => t.status !== 'COMPLETADO').length },
+                    { id: 'archivos', label: '📁 Gestor de Archivos', count: documents.length }
                 ].map(t => (
                     <button
                         key={t.id}
@@ -833,6 +966,174 @@ export function PerfilClienteActivo() {
                         </CardContent>
                     </Card>
                 )}
+
+                {/* 6. SUBSCRIPCIONES Y RENOVACIONES (Opción 1) */}
+                {activeTab === 'renovaciones' && (
+                    <Card className="border-gray-200">
+                        <CardContent className="p-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-lg font-bold text-gray-950 font-black">Servicios Recurrentes y Renovaciones</h3>
+                                <Button className="bg-[#4a55c2] hover:bg-[#3b43a1] h-9 gap-1.5 text-xs font-bold" onClick={() => setIsSubModalOpen(true)}>
+                                    <PlusCircle className="w-4 h-4" /> Agregar Servicio Recurrente
+                                </Button>
+                            </div>
+
+                            {subscriptions.length === 0 ? (
+                                <div className="text-center py-12 text-gray-400">
+                                    <Calendar className="w-12 h-12 mx-auto text-gray-200 mb-2" />
+                                    <p className="font-medium">No se han registrado renovaciones o servicios recurrentes.</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b border-gray-100">
+                                            <tr>
+                                                <th className="px-4 py-3">Nombre del Servicio</th>
+                                                <th className="px-4 py-3">Costo / Tarifa</th>
+                                                <th className="px-4 py-3">Periodicidad</th>
+                                                <th className="px-4 py-3">Próximo Vencimiento</th>
+                                                <th className="px-4 py-3">Estado</th>
+                                                <th className="px-4 py-3 text-center">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {subscriptions.map(sub => {
+                                                const daysLeft = Math.ceil((new Date(sub.next_due_date).getTime() - new Date().getTime()) / (1000 * 3600 * 24))
+                                                return (
+                                                    <tr key={sub.id} className="hover:bg-gray-50">
+                                                        <td className="px-4 py-3 font-semibold text-gray-900">{sub.service_name}</td>
+                                                        <td className="px-4 py-3 font-black text-gray-900">${parseFloat(sub.price).toFixed(2)}</td>
+                                                        <td className="px-4 py-3">
+                                                            <span className="bg-slate-100 text-slate-700 text-[10px] font-black px-2 py-0.5 rounded">
+                                                                {sub.billing_period}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex flex-col">
+                                                                <span className="font-semibold">{sub.next_due_date}</span>
+                                                                {sub.status === 'ACTIVO' && (
+                                                                    <span className={`text-[10px] font-bold ${daysLeft <= 7 ? 'text-red-500 animate-pulse' : daysLeft <= 30 ? 'text-amber-500' : 'text-gray-400'}`}>
+                                                                        {daysLeft < 0 ? 'Vencido hace ' + Math.abs(daysLeft) + ' días' : 'Vence en ' + daysLeft + ' días'}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border
+                                                                ${sub.status === 'ACTIVO' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : ''}
+                                                                ${sub.status === 'SUSPENDIDO' ? 'bg-amber-50 text-amber-700 border-amber-200' : ''}
+                                                                ${sub.status === 'CANCELADO' ? 'bg-red-50 text-red-700 border-red-200' : ''}
+                                                            `}>
+                                                                {sub.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                {sub.status === 'ACTIVO' && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRenewSubscription(sub.id)}
+                                                                        className="text-xs bg-indigo-500 hover:bg-indigo-600 text-white font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1"
+                                                                    >
+                                                                        🔄 Registrar Renovación
+                                                                    </button>
+                                                                )}
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteSubscription(sub.id)}
+                                                                    className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded"
+                                                                >
+                                                                    <Trash className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* 7. GESTOR DE ARCHIVOS / DOCUMENTOS (Opción 4) */}
+                {activeTab === 'archivos' && (
+                    <Card className="border-gray-200">
+                        <CardContent className="p-6 space-y-6">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-950 font-black">Bóveda de Archivos y Entregables</h3>
+                                    <p className="text-xs text-gray-500 font-medium">Sube contratos, briefs, manuales y recursos del cliente.</p>
+                                </div>
+                                <div>
+                                    <input 
+                                        type="file" 
+                                        onChange={handleUploadFile} 
+                                        className="hidden" 
+                                        id="client-doc-upload" 
+                                        disabled={uploadingDoc}
+                                    />
+                                    <label 
+                                        htmlFor="client-doc-upload"
+                                        className={`bg-[#4a55c2] hover:bg-[#3b43a1] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5 transition-all
+                                            ${uploadingDoc ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        {uploadingDoc ? <RefreshCw className="w-4 h-4 animate-spin" /> : <PlusCircle className="w-4 h-4" />}
+                                        {uploadingDoc ? 'Subiendo...' : 'Subir Archivo'}
+                                    </label>
+                                </div>
+                            </div>
+
+                            {documents.length === 0 ? (
+                                <div className="text-center py-12 border-2 border-dashed border-gray-150 rounded-2xl text-gray-400">
+                                    <FileText className="w-12 h-12 mx-auto text-gray-200 mb-2" />
+                                    <p className="font-medium">No se han subido archivos para este cliente.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {documents.map(doc => {
+                                        const sizeInMB = (doc.file_size / (1024 * 1024)).toFixed(2)
+                                        return (
+                                            <Card key={doc.id} className="border-gray-200 hover:border-indigo-200 transition-colors shadow-sm overflow-hidden relative group">
+                                                <div className="absolute top-0 left-0 right-0 h-1 bg-slate-200 group-hover:bg-indigo-500 transition-colors" />
+                                                <CardContent className="p-4 flex items-start justify-between gap-3">
+                                                    <div className="flex items-start gap-3 min-w-0">
+                                                        <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-lg shrink-0">
+                                                            📁
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <h4 className="font-bold text-sm text-gray-900 truncate" title={doc.filename}>{doc.filename}</h4>
+                                                            <p className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">{sizeInMB} MB • {doc.uploaded_at.split(' ')[0]}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <a 
+                                                            href={`/${doc.file_url}`} 
+                                                            target="_blank" 
+                                                            rel="noreferrer"
+                                                            className="text-indigo-600 hover:text-indigo-800 p-1.5 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                        >
+                                                            <ExternalLink className="w-4 h-4" />
+                                                        </a>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => handleDeleteFile(doc.id)}
+                                                            className="text-gray-300 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                                                        >
+                                                            <Trash className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
             </div>
 
             {/* --- MODAL PAGO --- */}
@@ -1011,6 +1312,132 @@ export function PerfilClienteActivo() {
                                     <Button type="submit" className="bg-orange-600 hover:bg-orange-700">Guardar Tarea</Button>
                                 </div>
                             </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* --- MODAL SUSCRIPCION / RECURRENTE (Opción 1) --- */}
+            {isSubModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-md shadow-2xl animate-in zoom-in-95 relative border-0 rounded-2xl overflow-hidden">
+                        <div className="bg-gradient-to-r from-indigo-500 to-[#4a55c2] p-6 text-white">
+                            <button onClick={() => setIsSubModalOpen(false)} className="absolute right-4 top-4 text-white/70 hover:text-white">
+                                <X className="w-5 h-5" />
+                            </button>
+                            <h2 className="text-xl font-black">Agregar Servicio Recurrente</h2>
+                        </div>
+                        <CardContent className="p-6 bg-white">
+                            <form onSubmit={handleAddSubscription} className="space-y-4">
+                                <Input label="Nombre del Servicio *" value={newSub.service_name} onChange={e => setNewSub({ ...newSub, service_name: e.target.value })} required placeholder="Ej: Hosting Anual, Soporte Técnico" />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <Input label="Tarifa / Precio ($) *" type="number" value={newSub.price} onChange={e => setNewSub({ ...newSub, price: e.target.value })} required />
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Periodicidad</label>
+                                        <select 
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#4a55c2] focus:border-transparent font-semibold"
+                                            value={newSub.billing_period}
+                                            onChange={e => setNewSub({ ...newSub, billing_period: e.target.value as any })}
+                                        >
+                                            <option value="MENSUAL">MENSUAL</option>
+                                            <option value="TRIMESTRAL">TRIMESTRAL</option>
+                                            <option value="SEMESTRAL">SEMESTRAL</option>
+                                            <option value="ANUAL">ANUAL</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <Input label="Próxima Fecha de Renovación / Vencimiento *" type="date" value={newSub.next_due_date} onChange={e => setNewSub({ ...newSub, next_due_date: e.target.value })} required />
+                                <div className="flex justify-end gap-3 pt-2">
+                                    <Button type="button" variant="ghost" onClick={() => setIsSubModalOpen(false)}>Cancelar</Button>
+                                    <Button type="submit" className="bg-[#4a55c2] hover:bg-[#3b43a1]">Guardar Servicio</Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* --- MODAL WHATSAPP PLANILLAS (Opción 2) --- */}
+            {isWpModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-md shadow-2xl animate-in zoom-in-95 relative border-0 rounded-2xl overflow-hidden">
+                        <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-6 text-white">
+                            <button onClick={() => setIsWpModalOpen(false)} className="absolute right-4 top-4 text-white/70 hover:text-white">
+                                <X className="w-5 h-5" />
+                            </button>
+                            <h2 className="text-xl font-black">💬 WhatsApp Rápido</h2>
+                            <p className="text-xs text-emerald-100 font-medium">Selecciona una plantilla para enviar automáticamente a {client.name}</p>
+                        </div>
+                        <CardContent className="p-6 bg-white space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Plantilla</label>
+                                <select 
+                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-semibold"
+                                    value={selectedWpTemplate}
+                                    onChange={e => setSelectedWpTemplate(e.target.value)}
+                                >
+                                    <option value="pago">💰 Recordatorio de Pago</option>
+                                    <option value="cambio">🌐 Cambio / Mejora Implementada</option>
+                                    <option value="credenciales">🔑 Bienvenida y Credenciales</option>
+                                </select>
+                            </div>
+
+                            {/* Campos variables según plantilla */}
+                            {selectedWpTemplate === 'pago' && (
+                                <div className="space-y-3">
+                                    <Input label="Monto ($)" placeholder="Ej: 1500" value={wpCustomParams.monto} onChange={e => setWpCustomParams({ ...wpCustomParams, monto: e.target.value })} />
+                                    <Input label="Concepto" placeholder="Ej: Mensualidad de Mantenimiento" value={wpCustomParams.concepto} onChange={e => setWpCustomParams({ ...wpCustomParams, concepto: e.target.value })} />
+                                    <Input label="Fecha Límite" type="date" value={wpCustomParams.fecha} onChange={e => setWpCustomParams({ ...wpCustomParams, fecha: e.target.value })} />
+                                </div>
+                            )}
+
+                            {selectedWpTemplate === 'cambio' && (
+                                <div className="space-y-3">
+                                    <Input label="Mejora / Cambio Realizado" placeholder="Ej: Rediseño del banner de cabecera" value={wpCustomParams.cambio} onChange={e => setWpCustomParams({ ...wpCustomParams, cambio: e.target.value })} />
+                                    <Input label="Sitio Web / URL" placeholder={client.social_website || "https://..."} value={wpCustomParams.url} onChange={e => setWpCustomParams({ ...wpCustomParams, url: e.target.value })} />
+                                </div>
+                            )}
+
+                            {selectedWpTemplate === 'credenciales' && (
+                                <div className="space-y-3">
+                                    <Input label="Plataforma" placeholder="Ej: WordPress Dashboard" value={wpCustomParams.plataforma} onChange={e => setWpCustomParams({ ...wpCustomParams, plataforma: e.target.value })} />
+                                    <Input label="Enlace / URL de ingreso" placeholder="Ej: https://web.com/wp-admin" value={wpCustomParams.url} onChange={e => setWpCustomParams({ ...wpCustomParams, url: e.target.value })} />
+                                    <Input label="Usuario" placeholder="Ej: admin@web.com" value={wpCustomParams.usuario} onChange={e => setWpCustomParams({ ...wpCustomParams, usuario: e.target.value })} />
+                                </div>
+                            )}
+
+                            {/* Vista previa del mensaje */}
+                            <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 text-xs text-gray-700">
+                                <p className="font-bold text-emerald-800 mb-1">Vista previa del WhatsApp:</p>
+                                <p className="italic whitespace-pre-line">
+                                    {selectedWpTemplate === 'pago' && `Hola *${client.name}*! Te escribo para recordarte que el pago de tu servicio/cuota de *${wpCustomParams.monto ? '$' + wpCustomParams.monto : '[monto]'}* correspondiente a *${wpCustomParams.concepto || '[concepto]'}* vence pronto${wpCustomParams.fecha ? ' (fecha límite: *' + wpCustomParams.fecha + '*)' : ''}. ¡Muchas gracias!`}
+                                    {selectedWpTemplate === 'cambio' && `Hola *${client.name}*! Te informo que hemos implementado con éxito la siguiente mejora/cambio en tu sistema: *${wpCustomParams.cambio || '[cambio realizado]'}*. Puedes verificarlo de inmediato en tu sitio web${wpCustomParams.url ? ' (*' + wpCustomParams.url + '*)' : ''}. Quedamos a tus órdenes.`}
+                                    {selectedWpTemplate === 'credenciales' && `Hola *${client.name}*! Te damos la bienvenida a tu proyecto. Aquí tienes los accesos directos configurados para tu plataforma *${wpCustomParams.plataforma || '[plataforma]'}*:\n\n🔗 Enlace: *${wpCustomParams.url || '[url]'}*\n👤 Usuario: *${wpCustomParams.usuario || '[usuario]'}*\n\nPor favor guarda estos datos en un lugar seguro.`}
+                                </p>
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-2">
+                                <Button type="button" variant="ghost" onClick={() => setIsWpModalOpen(false)}>Cancelar</Button>
+                                <Button 
+                                    type="button" 
+                                    className="bg-emerald-600 hover:bg-emerald-700 font-bold text-white border-none" 
+                                    onClick={() => {
+                                        let msg = '';
+                                        if (selectedWpTemplate === 'pago') {
+                                            msg = `Hola *${client.name}*! Te escribo para recordarte que el pago de tu servicio/cuota de *${wpCustomParams.monto ? '$' + wpCustomParams.monto : '[monto]'}* correspondiente a *${wpCustomParams.concepto || '[concepto]'}* vence pronto${wpCustomParams.fecha ? ' (fecha límite: *' + wpCustomParams.fecha + '*)' : ''}. ¡Muchas gracias!`;
+                                        } else if (selectedWpTemplate === 'cambio') {
+                                            msg = `Hola *${client.name}*! Te informo que hemos implementado con éxito la siguiente mejora/cambio en tu sistema: *${wpCustomParams.cambio || '[cambio realizado]'}*. Puedes verificarlo de inmediato en tu sitio web${wpCustomParams.url ? ' (*' + wpCustomParams.url + '*)' : ''}. Quedamos a tus órdenes.`;
+                                        } else if (selectedWpTemplate === 'credenciales') {
+                                            msg = `Hola *${client.name}*! Te damos la bienvenida a tu proyecto. Aquí tienes los accesos directos configurados para tu plataforma *${wpCustomParams.plataforma || '[plataforma]'}*:\n\n🔗 Enlace: *${wpCustomParams.url || '[url]'}*\n👤 Usuario: *${wpCustomParams.usuario || '[usuario]'}*\n\nPor favor guarda estos datos en un lugar seguro.`;
+                                        }
+                                        const cleanPhone = client.phone.replace(/[^0-9]/g, '');
+                                        window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`, '_blank');
+                                        setIsWpModalOpen(false);
+                                    }}
+                                >
+                                    Enviar WhatsApp 🚀
+                                </Button>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
