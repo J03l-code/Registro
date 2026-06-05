@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { Search, Plus, X, MessageCircle, Filter, Eye, DollarSign, AtSign, ArrowRight, BellRing, CalendarClock, Download, UploadCloud, FileText, LayoutList, KanbanSquare, Trash2, Globe, Share2, Mail } from "lucide-react"
 import { QuoteGenerator } from "../components/QuoteGenerator"
 import { Button } from "../components/ui/Button"
@@ -21,6 +22,7 @@ const KANBAN_COLS = [
 ];
 
 export function Clientes({ filterMode = 'main' }: { filterMode?: 'main' | 'archived' }) {
+    const navigate = useNavigate();
     const [clients, setClients] = useState<any[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -66,6 +68,42 @@ export function Clientes({ filterMode = 'main' }: { filterMode?: 'main' | 'archi
                 setLoading(false);
             });
     }, []);
+
+    const handlePromoteToActive = async (lead: any) => {
+        if (!confirm(`¿Deseas promover a "${lead.name}" a Cliente Activo?\n\nSe creará un expediente dedicado con control de pagos, bitácora de cambios, credenciales y checklist de tareas.`)) return;
+        try {
+            const res = await fetch('/api/active_clients.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    lead_id: lead.id,
+                    name: lead.name,
+                    rubro: lead.interest || '',
+                    phone: lead.phone || '',
+                    email: lead.email || '',
+                    social_instagram: '',
+                    social_facebook: '',
+                    social_website: lead.website || '',
+                    address: '',
+                    logo_url: '',
+                    contract_total: parseFloat(lead.price || 0),
+                    project_status: 'ACTIVO',
+                    project_notes: `Promovido desde leads de CRM. Comentarios originales: ${lead.comments || 'Sin comentarios.'}`,
+                    started_at: new Date().toISOString().split('T')[0]
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(`¡Excelente! "${lead.name}" ha sido promovido exitosamente a Clientes Activos.`);
+                navigate(`/clientes-activos/${data.id}`);
+            } else {
+                alert("Error al promover a cliente activo: " + data.error);
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Ocurrió un error al procesar la solicitud.");
+        }
+    };
 
     const handleAddClient = (e: React.FormEvent) => {
         e.preventDefault();
@@ -543,6 +581,13 @@ export function Clientes({ filterMode = 'main' }: { filterMode?: 'main' | 'archi
                                         <CalendarClock className="w-4 h-4 mr-2" /> Agendar Siguiente Paso
                                     </Button>
                                 )}
+
+                                <Button 
+                                    onClick={() => handlePromoteToActive(currentLead)} 
+                                    className="w-full mt-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-bold shadow-md border-none flex items-center justify-center gap-1.5"
+                                >
+                                    ⭐ Promover a Cliente Activo
+                                </Button>
 
                                 <Button onClick={() => setIsQuoteOpen(true)} className="w-full mt-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 shadow-none border border-indigo-200 font-bold">
                                     <FileText className="w-4 h-4 mr-2" /> Generar Cotización PDF Formal
