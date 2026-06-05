@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
+import { useNavigate } from "react-router-dom"
 import { Calendar, PhoneCall, CheckCircle2, Clock, Plus, X, Target, Mail, Trash2, AlertTriangle } from "lucide-react"
 import { Card, CardContent } from "../components/ui/Card"
 import { Button } from "../components/ui/Button"
@@ -28,6 +29,7 @@ function getFirstDayOfMonth(year: number, month: number) {
 }
 
 export function Agenda() {
+    const navigate = useNavigate()
     const [followups, setFollowups] = useState<any[]>([])
     const [leads, setLeads] = useState<any[]>([])
     const [activeClients, setActiveClients] = useState<any[]>([])
@@ -36,6 +38,7 @@ export function Agenda() {
     const [saving, setSaving] = useState(false)
     const [reschedulingTask, setReschedulingTask] = useState<any>(null)
     const [newDate, setNewDate] = useState("")
+    const [statusTab, setStatusTab] = useState<'activas' | 'completadas'>('activas')
     const [filter, setFilter] = useState<'todas' | 'hoy' | 'semana' | 'vencidas'>('todas')
     const [filterType, setFilterType] = useState<string>('TODAS')
     const [calMonth, setCalMonth] = useState(new Date().getMonth())
@@ -77,10 +80,18 @@ export function Agenda() {
         }).finally(() => setSaving(false))
     }
 
-    const handleComplete = (id: number) => {
-        if (!confirm("¿Marcar como completada?")) return
-        fetch('/api/agenda.php', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'complete' }) })
-            .then(r => r.json()).then(d => { if (d.success) fetchAgenda() })
+    const handleToggleComplete = (id: number, currentCompleted: boolean | number) => {
+        const isCompleted = currentCompleted === true || Number(currentCompleted) === 1
+        const action = isCompleted ? 'uncomplete' : 'complete'
+        const msg = isCompleted ? "¿Marcar esta actividad como pendiente?" : "¿Marcar esta actividad como completada?"
+        if (!confirm(msg)) return
+        fetch('/api/agenda.php', { 
+            method: 'PUT', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ id, action }) 
+        })
+        .then(r => r.json())
+        .then(d => { if (d.success) fetchAgenda() })
     }
 
     const handleDelete = (id: number) => {
@@ -101,8 +112,18 @@ export function Agenda() {
     const now = new Date()
     const today = now.toDateString()
 
+    // Separamos tareas activas de completadas
+    const activeTasks = useMemo(() => {
+        return followups.filter(t => !t.completed || t.completed === '0' || t.completed === 0 || t.completed === false)
+    }, [followups])
+
+    const completedTasks = useMemo(() => {
+        return followups.filter(t => t.completed === true || t.completed === 1 || t.completed === '1')
+    }, [followups])
+
     const filtered = useMemo(() => {
-        let list = [...followups]
+        let list = statusTab === 'activas' ? [...activeTasks] : [...completedTasks]
+
         // Filtro tipo
         if (filterType !== 'TODAS') list = list.filter(t => t.type === filterType)
         // Filtro tiempo
@@ -119,25 +140,25 @@ export function Agenda() {
             })
         }
         return list
-    }, [followups, filter, filterType, selectedDay, calYear, calMonth])
+    }, [activeTasks, completedTasks, statusTab, filter, filterType, selectedDay, calYear, calMonth])
 
-    // Días con tareas en el mes actual
+    // Días con tareas pendientes en el mes actual
     const daysWithTasks = useMemo(() => {
         return new Set(
-            followups.filter(t => {
+            activeTasks.filter(t => {
                 const d = new Date(t.scheduled_for)
                 return d.getFullYear() === calYear && d.getMonth() === calMonth
             }).map(t => new Date(t.scheduled_for).getDate())
         )
-    }, [followups, calYear, calMonth])
+    }, [activeTasks, calYear, calMonth])
+
+    const todayCount = activeTasks.filter(t => new Date(t.scheduled_for).toDateString() === today).length
+    const overdueCount = activeTasks.filter(t => new Date(t.scheduled_for) < now).length
 
     const daysInMonth = getDaysInMonth(calYear, calMonth)
     const firstDay = getFirstDayOfMonth(calYear, calMonth)
     const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
     const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
-
-    const todayCount = followups.filter(t => new Date(t.scheduled_for).toDateString() === today).length
-    const overdueCount = followups.filter(t => new Date(t.scheduled_for) < now).length
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -155,10 +176,10 @@ export function Agenda() {
             {/* KPIs rápidos */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
-                    { label: 'Total Pendientes', value: followups.length, cls: 'text-[#4a55c2]', bg: 'bg-indigo-50' },
+                    { label: 'Total Pendientes', value: activeTasks.length, cls: 'text-[#4a55c2]', bg: 'bg-indigo-50' },
                     { label: 'Para Hoy', value: todayCount, cls: 'text-emerald-600', bg: 'bg-emerald-50' },
                     { label: '⚠️ Vencidas', value: overdueCount, cls: 'text-red-500', bg: 'bg-red-50' },
-                    { label: 'Esta Semana', value: followups.filter(t => { const d = new Date(t.scheduled_for); const e = new Date(); e.setDate(e.getDate()+7); return d <= e }).length, cls: 'text-amber-600', bg: 'bg-amber-50' },
+                    { label: 'Completadas', value: completedTasks.length, cls: 'text-slate-600', bg: 'bg-slate-100' },
                 ].map(k => (
                     <div key={k.label} className={`${k.bg} rounded-2xl p-4 border border-white`}>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{k.label}</p>
@@ -214,6 +235,24 @@ export function Agenda() {
 
                 {/* Lista de tareas */}
                 <div className="lg:col-span-2 space-y-4">
+                    {/* Selectores principales: Activas / Completadas */}
+                    <div className="flex border-b border-gray-200 gap-4">
+                        <button
+                            onClick={() => { setStatusTab('activas'); setSelectedDay(null) }}
+                            className={`pb-2 text-sm font-black transition-all border-b-2
+                                ${statusTab === 'activas' ? 'border-[#4a55c2] text-[#4a55c2]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                        >
+                            📅 Actividades Pendientes ({activeTasks.length})
+                        </button>
+                        <button
+                            onClick={() => { setStatusTab('completadas'); setSelectedDay(null) }}
+                            className={`pb-2 text-sm font-black transition-all border-b-2
+                                ${statusTab === 'completadas' ? 'border-[#4a55c2] text-[#4a55c2]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                        >
+                            ✅ Completadas ({completedTasks.length})
+                        </button>
+                    </div>
+
                     {/* Filtros */}
                     <div className="flex flex-wrap gap-2">
                         <div className="flex bg-white border border-gray-200 rounded-xl p-1 gap-1 shadow-sm">
@@ -239,13 +278,14 @@ export function Agenda() {
                     {!loading && filtered.length === 0 && (
                         <div className="text-center py-16 text-gray-400">
                             <Calendar className="w-12 h-12 mx-auto text-gray-200 mb-3" />
-                            <p className="font-bold">No hay actividades con estos filtros.</p>
+                            <p className="font-bold">No hay actividades en esta sección.</p>
                         </div>
                     )}
                     <div className="space-y-3">
                         {filtered.map(item => {
+                            const isCompleted = item.completed === true || item.completed === 1 || item.completed === '1'
                             const scheduledDate = new Date(item.scheduled_for)
-                            const isOverdue = scheduledDate < now
+                            const isOverdue = !isCompleted && (scheduledDate < now)
                             const isToday = scheduledDate.toDateString() === today
                             const meta = TYPE_META[item.type] || TYPE_META['LLAMADA']
                             const Icon = meta.icon
@@ -254,38 +294,63 @@ export function Agenda() {
 
                             return (
                                 <div key={item.id} className={`bg-white border rounded-2xl p-4 shadow-sm transition-all hover:shadow-md
-                                    ${isOverdue ? 'border-red-200 bg-red-50/30' : isToday ? 'border-emerald-200 bg-emerald-50/20' : 'border-gray-200'}
+                                    ${isCompleted ? 'border-slate-200 bg-slate-50/50 opacity-80' : isOverdue ? 'border-red-200 bg-red-50/30' : isToday ? 'border-emerald-200 bg-emerald-50/20' : 'border-gray-200'}
                                 `}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex items-start gap-3 min-w-0">
-                                            <div className={`w-10 h-10 rounded-xl ${meta.bg} flex items-center justify-center shrink-0`}>
-                                                <Icon className={`w-5 h-5 ${meta.color}`} />
+                                            <div className={`w-10 h-10 rounded-xl ${isCompleted ? 'bg-slate-100' : meta.bg} flex items-center justify-center shrink-0`}>
+                                                <Icon className={`w-5 h-5 ${isCompleted ? 'text-slate-400' : meta.color}`} />
                                             </div>
                                             <div className="min-w-0 space-y-1">
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    <p className="font-black text-sm text-gray-900">{item.summary}</p>
-                                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${pMeta.cls}`}>{pMeta.label}</span>
+                                                    <p className={`font-black text-sm text-gray-900 ${isCompleted ? 'line-through text-gray-400' : ''}`}>{item.summary}</p>
+                                                    {!isCompleted && <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${pMeta.cls}`}>{pMeta.label}</span>}
                                                     <span className="text-[9px] font-black px-2 py-0.5 rounded bg-slate-100 text-slate-600">{item.type}</span>
                                                     {isOverdue && <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-red-100 text-red-600 flex items-center gap-0.5"><AlertTriangle className="w-3 h-3" /> VENCIDA</span>}
-                                                    {isToday && !isOverdue && <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">HOY</span>}
+                                                    {isToday && !isCompleted && <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">HOY</span>}
+                                                    {isCompleted && <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">COMPLETADO</span>}
                                                 </div>
-                                                {clientLabel && <p className="text-xs text-gray-500 font-semibold">{clientLabel}</p>}
+                                                
+                                                {clientLabel && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (item.active_client_id) {
+                                                                navigate(`/clientes-activos/${item.active_client_id}`)
+                                                            } else if (item.lead_id) {
+                                                                navigate(`/clientes`)
+                                                            }
+                                                        }}
+                                                        className="text-xs text-[#4a55c2] hover:text-[#3b43a1] font-bold hover:underline text-left block"
+                                                    >
+                                                        {clientLabel}
+                                                    </button>
+                                                )}
+
                                                 {item.notes && <p className="text-xs text-gray-400 italic truncate">📝 {item.notes}</p>}
                                                 <div className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-lg
-                                                    ${isOverdue ? 'bg-red-100 text-red-600' : 'bg-indigo-50 text-[#4a55c2]'}`}>
+                                                    ${isCompleted ? 'bg-slate-150 text-slate-500' : isOverdue ? 'bg-red-100 text-red-600' : 'bg-indigo-50 text-[#4a55c2]'}`}>
                                                     <Clock className="w-3.5 h-3.5" />
                                                     {scheduledDate.toLocaleString('es-MX', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-1.5 shrink-0">
-                                            <button onClick={() => { setReschedulingTask(item); setNewDate(item.scheduled_for?.slice(0,16) || '') }} className="text-xs border border-gray-200 text-gray-600 hover:bg-gray-100 px-2 py-1 rounded-lg font-bold transition-colors">
-                                                📅
-                                            </button>
-                                            <button onClick={() => handleComplete(item.id)} className="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded-lg font-bold transition-colors">
+                                            {!isCompleted && (
+                                                <button onClick={() => { setReschedulingTask(item); setNewDate(item.scheduled_for?.slice(0,16) || '') }} className="text-xs border border-gray-200 text-gray-600 hover:bg-gray-100 px-2 py-1 rounded-lg font-bold transition-colors" title="Reprogramar">
+                                                    📅
+                                                </button>
+                                            )}
+                                            <button 
+                                                onClick={() => handleToggleComplete(item.id, item.completed)} 
+                                                className={`text-xs px-2 py-1 rounded-lg font-bold transition-colors flex items-center gap-1
+                                                    ${isCompleted ? 'bg-slate-200 hover:bg-slate-300 text-slate-700' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}
+                                                title={isCompleted ? "Marcar como pendiente" : "Marcar como completada"}
+                                            >
                                                 <CheckCircle2 className="w-4 h-4" />
+                                                {isCompleted && <span className="text-[10px]">Reabrir</span>}
                                             </button>
-                                            <button onClick={() => handleDelete(item.id)} className="text-gray-300 hover:text-red-500 p-1 rounded-lg hover:bg-red-50 transition-colors">
+                                            <button onClick={() => handleDelete(item.id)} className="text-gray-300 hover:text-red-500 p-1 rounded-lg hover:bg-red-50 transition-colors" title="Eliminar permanentemente">
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>

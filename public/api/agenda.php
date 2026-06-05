@@ -27,8 +27,7 @@ switch ($method) {
                 FROM activities a
                 LEFT JOIN leads l ON a.lead_id = l.id
                 LEFT JOIN active_clients ac ON a.active_client_id = ac.id
-                WHERE a.completed = FALSE
-                ORDER BY a.scheduled_for ASC
+                ORDER BY a.scheduled_for DESC
             ");
             $agenda = $stmt->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(['success' => true, 'data' => $agenda]);
@@ -72,6 +71,9 @@ switch ($method) {
             try {
                 if (isset($data['action']) && $data['action'] === 'complete') {
                     $stmt = $pdo->prepare("UPDATE activities SET completed = TRUE WHERE id = :id");
+                    $stmt->execute([':id' => $data['id']]);
+                } elseif (isset($data['action']) && $data['action'] === 'uncomplete') {
+                    $stmt = $pdo->prepare("UPDATE activities SET completed = FALSE WHERE id = :id");
                     $stmt->execute([':id' => $data['id']]);
                 } elseif (isset($data['action']) && $data['action'] === 'reschedule' && isset($data['newDate'])) {
                     $stmt = $pdo->prepare("UPDATE activities SET scheduled_for = :newDate WHERE id = :id");
