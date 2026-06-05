@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom"
-import { Users, LayoutDashboard, CalendarDays, LogOut, Briefcase, Archive, Receipt, Star } from "lucide-react"
+import { Users, LayoutDashboard, CalendarDays, LogOut, Archive, Receipt, Star } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { GlobalSearch } from "../ui/GlobalSearch"
 
@@ -45,8 +45,8 @@ export function Layout() {
             {/* Sidebar */}
             <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col">
                 <div className="h-16 flex items-center px-4 border-b border-gray-200 gap-2">
-                    <Briefcase className="w-5 h-5 text-brand-600 shrink-0" />
-                    <span className="font-bold text-gray-900 text-base tracking-tight">CRM SaaS</span>
+                    <img src="/logo-jd-clean.png" alt="JiyaneDesign" className="w-8 h-8 object-contain shrink-0" />
+                    <span className="font-black text-gray-900 text-base tracking-tight">JiyaneDesign</span>
                 </div>
                 {/* Búsqueda global en sidebar */}
                 <div className="px-4 pt-4 pb-2">
@@ -91,9 +91,9 @@ export function Layout() {
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
                 {/* Topbar mobile */}
                 <header className="h-16 md:hidden bg-white border-b border-gray-200 flex items-center px-4 gap-3">
-                    <div className="flex items-center shrink-0">
-                        <Briefcase className="w-5 h-5 text-brand-600 mr-1.5" />
-                        <span className="font-bold text-gray-900 text-sm">CRM</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        <img src="/logo-jd-clean.png" alt="JiyaneDesign" className="w-7 h-7 object-contain" />
+                        <span className="font-black text-gray-900 text-sm">JiyaneDesign</span>
                     </div>
                     <div className="flex-1">
                         <GlobalSearch />
