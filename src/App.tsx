@@ -5,6 +5,8 @@ import { Dashboard } from './pages/Dashboard'
 import { Clientes } from './pages/Clientes'
 import { Agenda } from './pages/Agenda'
 import { NotaVenta } from './pages/NotaVenta'
+import { ClientesActivos } from './pages/ClientesActivos'
+import { PerfilClienteActivo } from './pages/PerfilClienteActivo'
 
 function App() {
   return (
@@ -13,6 +15,8 @@ function App() {
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/clientes" element={<Clientes filterMode="main" />} />
+        <Route path="/clientes-activos" element={<ClientesActivos />} />
+        <Route path="/clientes-activos/:id" element={<PerfilClienteActivo />} />
         <Route path="/contactados" element={<Clientes filterMode="archived" />} />
         <Route path="/agenda" element={<Agenda />} />
         <Route path="/nota-venta" element={<NotaVenta />} />
@@ -22,3 +26,4 @@ function App() {
 }
 
 export default App
+
