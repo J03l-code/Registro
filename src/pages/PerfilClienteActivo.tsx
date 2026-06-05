@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { 
-    ArrowLeft, Star, DollarSign, Calendar, Landmark, Key, 
-    Globe, Phone, Mail, MapPin, Eye, EyeOff, Save, Trash2, Plus, 
-    CheckCircle2, Clock, Play, AlertCircle, RefreshCw, FileText, 
-    FileUp, LayoutList, CheckSquare, PlusCircle, Trash, ExternalLink
+    ArrowLeft, DollarSign, Calendar, Landmark, Key, 
+    Globe, Phone, Mail, Eye, EyeOff, Save, Trash2, 
+    CheckCircle2, RefreshCw, CheckSquare, PlusCircle, Trash, ExternalLink, X
 } from "lucide-react"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
@@ -13,9 +12,9 @@ import { Card, CardContent } from "../components/ui/Card"
 const PAYMENT_METHODS = ['TRANSFERENCIA', 'EFECTIVO', 'TARJETA', 'CHEQUE', 'OTRO']
 const PAYMENT_STATUSES = ['PENDIENTE', 'PAGADO', 'VENCIDO']
 const CHANGE_TYPES = ['DISEÑO', 'FUNCIONALIDAD', 'CONTENIDO', 'SEO', 'CORRECCIÓN', 'OTRO']
-const CHANGE_STATUSES = ['COMPLETADO', 'EN_PROGRESO', 'PENDIENTE']
 const PRIORITIES = ['ALTA', 'MEDIA', 'BAJA']
 const PROJECT_STATUSES = ['ACTIVO', 'EN_PAUSA', 'COMPLETADO', 'CANCELADO']
+
 
 export function PerfilClienteActivo() {
     const { id } = useParams<{ id: string }>()
