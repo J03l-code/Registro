@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom"
 import { Users, LayoutDashboard, CalendarDays, LogOut, Briefcase, Archive, Receipt, Star } from "lucide-react"
 import { cn } from "../../lib/utils"
@@ -6,13 +6,20 @@ import { cn } from "../../lib/utils"
 export function Layout() {
     const location = useLocation();
     const navigate = useNavigate();
+    const [agendaCount, setAgendaCount] = useState(0);
 
     // Protección de Rutas (Private Router a nivel Layout)
     useEffect(() => {
         const token = localStorage.getItem('crm_token');
         if (!token) {
             navigate('/login', { replace: true });
+            return;
         }
+        // Badge de agenda - tareas de hoy
+        fetch('/api/agenda.php?count_today=1')
+            .then(r => r.json())
+            .then(d => { if (d.success) setAgendaCount(d.count || 0) })
+            .catch(() => {})
     }, [navigate]);
 
     const handleLogout = (e: React.MouseEvent) => {
@@ -57,7 +64,12 @@ export function Layout() {
                                 )}
                             >
                                 <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
-                                {link.name}
+                                <span className="flex-1">{link.name}</span>
+                                {link.path === '/agenda' && agendaCount > 0 && (
+                                    <span className="ml-auto bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow">
+                                        {agendaCount > 9 ? '9+' : agendaCount}
+                                    </span>
+                                )}
                             </Link>
                         )
                     })}

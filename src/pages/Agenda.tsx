@@ -1,190 +1,352 @@
-import { useState, useEffect } from "react"
-import { Calendar, PhoneCall, CheckCircle2, Clock, Plus, X, Target } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { Calendar, PhoneCall, CheckCircle2, Clock, Plus, X, Target, Mail, Trash2, AlertTriangle } from "lucide-react"
 import { Card, CardContent } from "../components/ui/Card"
-import { Badge } from "../components/ui/Badge"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 
-export function Agenda() {
-    const [followups, setFollowups] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [newTask, setNewTask] = useState({ summary: '', type: 'LLAMADA', date: '' });
-    const [saving, setSaving] = useState(false);
+const TASK_TYPES = ['LLAMADA', 'EMAIL', 'REUNIÓN', 'ACUERDO']
+const PRIORITIES = ['ALTA', 'MEDIA', 'BAJA']
 
-    // Estados para Reprogramar
-    const [reschedulingTask, setReschedulingTask] = useState<any>(null);
-    const [newDate, setNewDate] = useState("");
+const TYPE_META: Record<string, { icon: any; color: string; bg: string }> = {
+    LLAMADA:  { icon: PhoneCall,    color: 'text-blue-500',   bg: 'bg-blue-50' },
+    EMAIL:    { icon: Mail,         color: 'text-gray-500',   bg: 'bg-gray-50' },
+    REUNIÓN:  { icon: Calendar,     color: 'text-purple-500', bg: 'bg-purple-50' },
+    ACUERDO:  { icon: Target,       color: 'text-emerald-500',bg: 'bg-emerald-50' },
+}
+
+const PRIORITY_META: Record<string, { label: string; cls: string }> = {
+    ALTA:  { label: 'ALTA',  cls: 'bg-red-100 text-red-700 border border-red-200' },
+    MEDIA: { label: 'MEDIA', cls: 'bg-amber-100 text-amber-700 border border-amber-200' },
+    BAJA:  { label: 'BAJA',  cls: 'bg-gray-100 text-gray-600 border border-gray-200' },
+}
+
+function getDaysInMonth(year: number, month: number) {
+    return new Date(year, month + 1, 0).getDate()
+}
+function getFirstDayOfMonth(year: number, month: number) {
+    return new Date(year, month, 1).getDay()
+}
+
+export function Agenda() {
+    const [followups, setFollowups] = useState<any[]>([])
+    const [leads, setLeads] = useState<any[]>([])
+    const [activeClients, setActiveClients] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+    const [isModalOpen, setIsModalOpen] = useState(false)
+    const [saving, setSaving] = useState(false)
+    const [reschedulingTask, setReschedulingTask] = useState<any>(null)
+    const [newDate, setNewDate] = useState("")
+    const [filter, setFilter] = useState<'todas' | 'hoy' | 'semana' | 'vencidas'>('todas')
+    const [filterType, setFilterType] = useState<string>('TODAS')
+    const [calMonth, setCalMonth] = useState(new Date().getMonth())
+    const [calYear, setCalYear] = useState(new Date().getFullYear())
+    const [selectedDay, setSelectedDay] = useState<number | null>(null)
+
+    const [newTask, setNewTask] = useState({
+        summary: '', type: 'LLAMADA', date: '', priority: 'MEDIA',
+        notes: '', lead_id: '', active_client_id: ''
+    })
 
     const fetchAgenda = () => {
-        setLoading(true);
+        setLoading(true)
         fetch('/api/agenda.php')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && Array.isArray(data.data)) {
-                    setFollowups(data.data);
-                }
-            })
-            .finally(() => setLoading(false));
-    };
+            .then(r => r.json())
+            .then(d => { if (d.success) setFollowups(d.data || []) })
+            .finally(() => setLoading(false))
+    }
 
     useEffect(() => {
-        fetchAgenda();
-    }, []);
+        fetchAgenda()
+        fetch('/api/clientes.php').then(r => r.json()).then(d => { if (d.success) setLeads(d.data || []) })
+        fetch('/api/active_clients.php').then(r => r.json()).then(d => { if (d.success) setActiveClients(d.data || []) })
+    }, [])
 
     const handleAddTask = (e: React.FormEvent) => {
-        e.preventDefault();
-        setSaving(true);
+        e.preventDefault()
+        setSaving(true)
         fetch('/api/agenda.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(newTask)
-        })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    fetchAgenda(); // Refrescar lista final
-                    setIsModalOpen(false);
-                    setNewTask({ summary: '', type: 'LLAMADA', date: '' });
-                }
-            })
-            .finally(() => setSaving(false));
-    };
-
-    const handleCompleteTask = (id: number) => {
-        if (!confirm("¿Marcar esta tarea como completada?")) return;
-        fetch('/api/agenda.php', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, action: 'complete' })
-        }).then(r => r.json()).then(data => {
-            if (data.success) fetchAgenda();
-        });
-    };
-
-    const handleRescheduleTask = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!reschedulingTask || !newDate) return;
-        setSaving(true);
-        fetch('/api/agenda.php', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: reschedulingTask.id, action: 'reschedule', newDate })
-        }).then(r => r.json()).then(data => {
-            if (data.success) {
-                fetchAgenda();
-                setReschedulingTask(null);
-                setNewDate("");
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                fetchAgenda()
+                setIsModalOpen(false)
+                setNewTask({ summary: '', type: 'LLAMADA', date: '', priority: 'MEDIA', notes: '', lead_id: '', active_client_id: '' })
             }
-        }).finally(() => setSaving(false));
-    };
+        }).finally(() => setSaving(false))
+    }
+
+    const handleComplete = (id: number) => {
+        if (!confirm("¿Marcar como completada?")) return
+        fetch('/api/agenda.php', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'complete' }) })
+            .then(r => r.json()).then(d => { if (d.success) fetchAgenda() })
+    }
+
+    const handleDelete = (id: number) => {
+        if (!confirm("¿Eliminar esta tarea de la agenda?")) return
+        fetch('/api/agenda.php', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+            .then(r => r.json()).then(d => { if (d.success) fetchAgenda() })
+    }
+
+    const handleReschedule = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!reschedulingTask || !newDate) return
+        setSaving(true)
+        fetch('/api/agenda.php', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: reschedulingTask.id, action: 'reschedule', newDate }) })
+            .then(r => r.json()).then(d => { if (d.success) { fetchAgenda(); setReschedulingTask(null); setNewDate("") } })
+            .finally(() => setSaving(false))
+    }
+
+    const now = new Date()
+    const today = now.toDateString()
+
+    const filtered = useMemo(() => {
+        let list = [...followups]
+        // Filtro tipo
+        if (filterType !== 'TODAS') list = list.filter(t => t.type === filterType)
+        // Filtro tiempo
+        if (filter === 'hoy') list = list.filter(t => new Date(t.scheduled_for).toDateString() === today)
+        else if (filter === 'semana') {
+            const end = new Date(); end.setDate(end.getDate() + 7)
+            list = list.filter(t => new Date(t.scheduled_for) <= end)
+        } else if (filter === 'vencidas') list = list.filter(t => new Date(t.scheduled_for) < now)
+        // Filtro día calendario
+        if (selectedDay !== null) {
+            list = list.filter(t => {
+                const d = new Date(t.scheduled_for)
+                return d.getFullYear() === calYear && d.getMonth() === calMonth && d.getDate() === selectedDay
+            })
+        }
+        return list
+    }, [followups, filter, filterType, selectedDay, calYear, calMonth])
+
+    // Días con tareas en el mes actual
+    const daysWithTasks = useMemo(() => {
+        return new Set(
+            followups.filter(t => {
+                const d = new Date(t.scheduled_for)
+                return d.getFullYear() === calYear && d.getMonth() === calMonth
+            }).map(t => new Date(t.scheduled_for).getDate())
+        )
+    }, [followups, calYear, calMonth])
+
+    const daysInMonth = getDaysInMonth(calYear, calMonth)
+    const firstDay = getFirstDayOfMonth(calYear, calMonth)
+    const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+    const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
+
+    const todayCount = followups.filter(t => new Date(t.scheduled_for).toDateString() === today).length
+    const overdueCount = followups.filter(t => new Date(t.scheduled_for) < now).length
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Agenda de Seguimiento</h1>
-                    <p className="text-gray-500 mt-1 text-sm">Programa y visualiza tus próximos contactos conectando con la BD.</p>
+                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">Agenda Pro</h1>
+                    <p className="text-gray-500 mt-1 text-sm font-medium">Gestiona llamadas, reuniones y compromisos con tus clientes.</p>
                 </div>
-                <Button onClick={() => setIsModalOpen(true)} className="bg-brand-600 hover:bg-brand-700 h-10">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Nueva Tarea
+                <Button onClick={() => setIsModalOpen(true)} className="bg-[#4a55c2] hover:bg-[#3b43a1] h-10 font-bold gap-1.5">
+                    <Plus className="w-4 h-4" /> Nueva Actividad
                 </Button>
             </div>
 
-            <Card>
-                <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex justify-between items-center text-sm text-gray-600 font-medium">
-                    <div className="flex items-center">
-                        <Calendar className="w-5 h-5 mr-2 text-brand-600" />
-                        Agenda Activa
+            {/* KPIs rápidos */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {[
+                    { label: 'Total Pendientes', value: followups.length, cls: 'text-[#4a55c2]', bg: 'bg-indigo-50' },
+                    { label: 'Para Hoy', value: todayCount, cls: 'text-emerald-600', bg: 'bg-emerald-50' },
+                    { label: '⚠️ Vencidas', value: overdueCount, cls: 'text-red-500', bg: 'bg-red-50' },
+                    { label: 'Esta Semana', value: followups.filter(t => { const d = new Date(t.scheduled_for); const e = new Date(); e.setDate(e.getDate()+7); return d <= e }).length, cls: 'text-amber-600', bg: 'bg-amber-50' },
+                ].map(k => (
+                    <div key={k.label} className={`${k.bg} rounded-2xl p-4 border border-white`}>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{k.label}</p>
+                        <p className={`text-3xl font-black mt-1 ${k.cls}`}>{k.value}</p>
+                    </div>
+                ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Mini Calendario */}
+                <Card className="border-gray-200 shadow-sm lg:col-span-1 h-fit">
+                    <div className="p-4 border-b border-gray-100">
+                        <div className="flex items-center justify-between">
+                            <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y-1) } else setCalMonth(m => m-1) }} className="text-gray-400 hover:text-gray-700 font-bold px-2 py-1 rounded hover:bg-gray-100">‹</button>
+                            <span className="font-black text-sm text-gray-900">{MONTHS[calMonth]} {calYear}</span>
+                            <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y+1) } else setCalMonth(m => m+1) }} className="text-gray-400 hover:text-gray-700 font-bold px-2 py-1 rounded hover:bg-gray-100">›</button>
+                        </div>
+                    </div>
+                    <CardContent className="p-4">
+                        <div className="grid grid-cols-7 gap-1 mb-2">
+                            {DAYS.map(d => <div key={d} className="text-center text-[10px] font-black text-gray-400 uppercase">{d}</div>)}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1">
+                            {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
+                            {Array.from({ length: daysInMonth }).map((_, i) => {
+                                const day = i + 1
+                                const isToday = new Date().getDate() === day && new Date().getMonth() === calMonth && new Date().getFullYear() === calYear
+                                const hasTasks = daysWithTasks.has(day)
+                                const isSelected = selectedDay === day
+                                return (
+                                    <button
+                                        key={day}
+                                        onClick={() => setSelectedDay(isSelected ? null : day)}
+                                        className={`relative text-center text-xs font-bold py-1.5 rounded-lg transition-all
+                                            ${isSelected ? 'bg-[#4a55c2] text-white shadow-md' : isToday ? 'bg-indigo-100 text-[#4a55c2]' : 'hover:bg-gray-100 text-gray-700'}
+                                        `}
+                                    >
+                                        {day}
+                                        {hasTasks && !isSelected && (
+                                            <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-emerald-500 block" />
+                                        )}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                        {selectedDay && (
+                            <button onClick={() => setSelectedDay(null)} className="mt-3 w-full text-xs font-bold text-indigo-600 hover:underline">
+                                ✕ Limpiar filtro de día
+                            </button>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Lista de tareas */}
+                <div className="lg:col-span-2 space-y-4">
+                    {/* Filtros */}
+                    <div className="flex flex-wrap gap-2">
+                        <div className="flex bg-white border border-gray-200 rounded-xl p-1 gap-1 shadow-sm">
+                            {(['todas','hoy','semana','vencidas'] as const).map(f => (
+                                <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all capitalize
+                                    ${filter === f ? 'bg-[#4a55c2] text-white shadow' : 'text-gray-500 hover:text-gray-800'}`}>
+                                    {f === 'todas' ? 'Todas' : f === 'hoy' ? '🔥 Hoy' : f === 'semana' ? '📅 Esta semana' : '⚠️ Vencidas'}
+                                </button>
+                            ))}
+                        </div>
+                        <select
+                            value={filterType}
+                            onChange={e => setFilterType(e.target.value)}
+                            className="bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-black text-gray-700 shadow-sm outline-none focus:ring-2 focus:ring-[#4a55c2]"
+                        >
+                            <option value="TODAS">Todos los tipos</option>
+                            {TASK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </div>
+
+                    {/* Items */}
+                    {loading && <p className="text-center text-gray-400 py-12 font-medium">Sincronizando agenda...</p>}
+                    {!loading && filtered.length === 0 && (
+                        <div className="text-center py-16 text-gray-400">
+                            <Calendar className="w-12 h-12 mx-auto text-gray-200 mb-3" />
+                            <p className="font-bold">No hay actividades con estos filtros.</p>
+                        </div>
+                    )}
+                    <div className="space-y-3">
+                        {filtered.map(item => {
+                            const scheduledDate = new Date(item.scheduled_for)
+                            const isOverdue = scheduledDate < now
+                            const isToday = scheduledDate.toDateString() === today
+                            const meta = TYPE_META[item.type] || TYPE_META['LLAMADA']
+                            const Icon = meta.icon
+                            const pMeta = PRIORITY_META[item.priority || 'MEDIA']
+                            const clientLabel = item.client_name ? `👔 ${item.client_name}` : item.lead_name ? `🔍 ${item.lead_name}` : null
+
+                            return (
+                                <div key={item.id} className={`bg-white border rounded-2xl p-4 shadow-sm transition-all hover:shadow-md
+                                    ${isOverdue ? 'border-red-200 bg-red-50/30' : isToday ? 'border-emerald-200 bg-emerald-50/20' : 'border-gray-200'}
+                                `}>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-start gap-3 min-w-0">
+                                            <div className={`w-10 h-10 rounded-xl ${meta.bg} flex items-center justify-center shrink-0`}>
+                                                <Icon className={`w-5 h-5 ${meta.color}`} />
+                                            </div>
+                                            <div className="min-w-0 space-y-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <p className="font-black text-sm text-gray-900">{item.summary}</p>
+                                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${pMeta.cls}`}>{pMeta.label}</span>
+                                                    <span className="text-[9px] font-black px-2 py-0.5 rounded bg-slate-100 text-slate-600">{item.type}</span>
+                                                    {isOverdue && <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-red-100 text-red-600 flex items-center gap-0.5"><AlertTriangle className="w-3 h-3" /> VENCIDA</span>}
+                                                    {isToday && !isOverdue && <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">HOY</span>}
+                                                </div>
+                                                {clientLabel && <p className="text-xs text-gray-500 font-semibold">{clientLabel}</p>}
+                                                {item.notes && <p className="text-xs text-gray-400 italic truncate">📝 {item.notes}</p>}
+                                                <div className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-lg
+                                                    ${isOverdue ? 'bg-red-100 text-red-600' : 'bg-indigo-50 text-[#4a55c2]'}`}>
+                                                    <Clock className="w-3.5 h-3.5" />
+                                                    {scheduledDate.toLocaleString('es-MX', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <button onClick={() => { setReschedulingTask(item); setNewDate(item.scheduled_for?.slice(0,16) || '') }} className="text-xs border border-gray-200 text-gray-600 hover:bg-gray-100 px-2 py-1 rounded-lg font-bold transition-colors">
+                                                📅
+                                            </button>
+                                            <button onClick={() => handleComplete(item.id)} className="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded-lg font-bold transition-colors">
+                                                <CheckCircle2 className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => handleDelete(item.id)} className="text-gray-300 hover:text-red-500 p-1 rounded-lg hover:bg-red-50 transition-colors">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
                 </div>
-                <CardContent className="p-0">
-                    <ul className="divide-y divide-gray-100">
-                        {loading && <li className="p-6 text-center text-gray-500">Sincronizando agenda...</li>}
-                        {!loading && followups.length === 0 && (
-                            <li className="p-10 text-center text-gray-500">Tu agenda está completamente libre en este momento.</li>
-                        )}
-                        {!loading && followups.map((item) => (
-                            <li key={item.id} className="p-6 hover:bg-gray-50 transition-colors">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-start">
-                                        <div className="flex-shrink-0 mt-1">
-                                            {item.type === 'LLAMADA' && <PhoneCall className="w-5 h-5 text-blue-500" />}
-                                            {item.type === 'EMAIL' && <CheckCircle2 className="w-5 h-5 text-gray-400" />}
-                                            {item.type === 'REUNIÓN' && <Calendar className="w-5 h-5 text-purple-500" />}
-                                            {item.type === 'ACUERDO' && <Target className="w-5 h-5 text-green-500" />}
-                                        </div>
-                                        <div className="ml-4">
-                                            <div className="flex items-center gap-2">
-                                                <p className="text-sm font-semibold text-gray-900">{item.summary}</p>
-                                                <Badge variant="outline">{item.type}</Badge>
-                                            </div>
-                                            <div className="mt-2 flex items-center gap-1 text-sm text-gray-500">
-                                                {item.company && <span className="font-medium text-gray-700">Cliente: {item.company}</span>}
-                                            </div>
-                                            <div className="mt-2 flex items-center text-xs text-brand-600 font-medium bg-brand-50 px-2 py-1 rounded inline-flex">
-                                                <Clock className="w-3.5 h-3.5 mr-1" />
-                                                {new Date(item.scheduled_for).toLocaleString()}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Button variant="outline" size="sm" onClick={() => { setReschedulingTask(item); setNewDate(item.scheduled_for.slice(0, 16)); }}>Reprogramar</Button>
-                                        <Button size="sm" className="bg-brand-600 text-white" onClick={() => handleCompleteTask(item.id)}>Completar</Button>
-                                    </div>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                </CardContent>
-            </Card>
+            </div>
 
-            {/* Modal Nueva Tarea */}
+            {/* Modal Nueva Actividad */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <Card className="w-full max-w-md animate-in zoom-in-95 duration-200 shadow-xl relative">
-                        <button onClick={() => setIsModalOpen(false)} className="absolute right-4 top-4 text-gray-400">
-                            <X className="w-5 h-5" />
-                        </button>
-                        <div className="p-6 border-b border-gray-100">
-                            <h2 className="text-xl font-bold">Añadir Actividad</h2>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-lg shadow-2xl animate-in zoom-in-95 relative border-0 rounded-2xl overflow-hidden">
+                        <div className="bg-gradient-to-r from-[#4a55c2] to-violet-600 p-6 text-white">
+                            <button onClick={() => setIsModalOpen(false)} className="absolute right-4 top-4 text-white/70 hover:text-white"><X className="w-5 h-5" /></button>
+                            <h2 className="text-xl font-black">Nueva Actividad de Agenda</h2>
+                            <p className="text-xs text-indigo-200 font-medium mt-1">Programa llamadas, reuniones y compromisos</p>
                         </div>
-                        <CardContent className="p-6">
+                        <CardContent className="p-6 bg-white">
                             <form onSubmit={handleAddTask} className="space-y-4">
-                                <Input
-                                    label="Detalle de la tarea"
-                                    autoFocus
-                                    required
-                                    value={newTask.summary}
-                                    onChange={(e) => setNewTask({ ...newTask, summary: e.target.value })}
-                                    placeholder="Ej: Llamar a proveedor..."
-                                />
-                                <div className="flex flex-col gap-1.5 w-full">
-                                    <label className="text-sm font-medium text-gray-700">Tipo de Acción</label>
-                                    <select
-                                        className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                                        value={newTask.type}
-                                        onChange={(e) => setNewTask({ ...newTask, type: e.target.value })}
-                                    >
-                                        <option value="LLAMADA">Llamada</option>
-                                        <option value="EMAIL">Correo Electrónico</option>
-                                        <option value="REUNIÓN">Reunión Virtual/Física</option>
-                                        <option value="ACUERDO">Seguimiento Comercial</option>
-                                    </select>
+                                <Input label="Descripción de la actividad *" autoFocus required value={newTask.summary} onChange={e => setNewTask({ ...newTask, summary: e.target.value })} placeholder="Ej: Llamar para confirmar propuesta..." />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Tipo de Acción</label>
+                                        <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#4a55c2] focus:border-transparent font-semibold" value={newTask.type} onChange={e => setNewTask({ ...newTask, type: e.target.value })}>
+                                            {TASK_TYPES.map(t => <option key={t}>{t}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Prioridad</label>
+                                        <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#4a55c2] focus:border-transparent font-semibold" value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value })}>
+                                            {PRIORITIES.map(p => <option key={p}>{p}</option>)}
+                                        </select>
+                                    </div>
                                 </div>
-                                <Input
-                                    label="Fecha y Hora Programada"
-                                    type="datetime-local"
-                                    required
-                                    value={newTask.date}
-                                    onChange={(e) => setNewTask({ ...newTask, date: e.target.value })}
-                                />
-                                <div className="pt-4 flex justify-end">
-                                    <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} className="mr-2">Cancelar</Button>
-                                    <Button type="submit" disabled={saving} className="bg-brand-600 hover:bg-brand-700">
-                                        {saving ? 'Guardando...' : 'Guardar Tarea'}
-                                    </Button>
+                                <Input label="Fecha y Hora *" type="datetime-local" required value={newTask.date} onChange={e => setNewTask({ ...newTask, date: e.target.value })} />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Vincular a Lead (CRM)</label>
+                                        <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#4a55c2] focus:border-transparent font-semibold" value={newTask.lead_id} onChange={e => setNewTask({ ...newTask, lead_id: e.target.value, active_client_id: '' })}>
+                                            <option value="">-- Sin lead --</option>
+                                            {leads.map((l: any) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Vincular a Cliente Activo</label>
+                                        <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#4a55c2] focus:border-transparent font-semibold" value={newTask.active_client_id} onChange={e => setNewTask({ ...newTask, active_client_id: e.target.value, lead_id: '' })}>
+                                            <option value="">-- Sin cliente --</option>
+                                            {activeClients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Notas Internas</label>
+                                    <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#4a55c2] focus:border-transparent resize-none" rows={2} value={newTask.notes} onChange={e => setNewTask({ ...newTask, notes: e.target.value })} placeholder="Contexto adicional, recordatorios, puntos clave..." />
+                                </div>
+                                <div className="flex justify-end gap-3 pt-2">
+                                    <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+                                    <Button type="submit" disabled={saving} className="bg-[#4a55c2] hover:bg-[#3b43a1]">{saving ? 'Guardando...' : 'Guardar Actividad'}</Button>
                                 </div>
                             </form>
                         </CardContent>
@@ -192,31 +354,25 @@ export function Agenda() {
                 </div>
             )}
 
-            {/* Modal Reprogramar Tarea */}
+            {/* Modal Reprogramar */}
             {reschedulingTask && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <Card className="w-full max-w-sm animate-in zoom-in-95 duration-200 shadow-xl relative text-center border-0 border-t-4 border-t-orange-500">
-                        <div className="p-6">
-                            <Clock className="w-12 h-12 text-orange-500 mx-auto mb-3" />
-                            <h2 className="text-xl font-bold text-gray-900 mb-1">Reprogramar Tarea</h2>
-                            <p className="text-sm text-gray-500 mb-6 truncate">"{reschedulingTask.summary}"</p>
-
-                            <form onSubmit={handleRescheduleTask} className="space-y-4">
-                                <Input
-                                    label="Selecciona Nueva Fecha y Hora"
-                                    type="datetime-local"
-                                    required
-                                    value={newDate}
-                                    onChange={(e) => setNewDate(e.target.value)}
-                                />
-                                <div className="pt-2 flex justify-center gap-3">
-                                    <Button type="button" variant="ghost" onClick={() => setReschedulingTask(null)} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700">Cancelar</Button>
-                                    <Button type="submit" disabled={saving} className="w-full bg-orange-500 hover:bg-orange-600">
-                                        {saving ? 'Guardando...' : 'Confirmar'}
-                                    </Button>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-sm shadow-2xl animate-in zoom-in-95 relative border-0 rounded-2xl overflow-hidden">
+                        <div className="bg-gradient-to-r from-amber-400 to-orange-500 p-6 text-white">
+                            <button onClick={() => setReschedulingTask(null)} className="absolute right-4 top-4 text-white/70 hover:text-white"><X className="w-5 h-5" /></button>
+                            <Clock className="w-8 h-8 mb-2" />
+                            <h2 className="text-lg font-black">Reprogramar</h2>
+                            <p className="text-xs text-amber-100 truncate mt-1">"{reschedulingTask.summary}"</p>
+                        </div>
+                        <CardContent className="p-6 bg-white">
+                            <form onSubmit={handleReschedule} className="space-y-4">
+                                <Input label="Nueva Fecha y Hora" type="datetime-local" required value={newDate} onChange={e => setNewDate(e.target.value)} />
+                                <div className="flex gap-3">
+                                    <Button type="button" variant="ghost" onClick={() => setReschedulingTask(null)} className="flex-1">Cancelar</Button>
+                                    <Button type="submit" disabled={saving} className="flex-1 bg-orange-500 hover:bg-orange-600">{saving ? 'Guardando...' : 'Confirmar'}</Button>
                                 </div>
                             </form>
-                        </div>
+                        </CardContent>
                     </Card>
                 </div>
             )}
